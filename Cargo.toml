@@ -1,8 +1,25 @@
 [package]
 name = "meson-contracts-solana"
-version = "0.1.0"
-edition = "2021"
+version = "3.0.1"
+authors = ["Github @wyf-ACCEPT"]
+repository = "https://github.com/solana-labs/solana-program-library"
+license = "Apache-2.0"
+edition = "2021"        ## Very important magic!!
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+no-entrypoint = []
+test-sbf = []
 
 [dependencies]
+arrayref = "0.3.7"
+solana-program = "1.14.12"
+
+[dev-dependencies]
+solana-program-test = "1.14.12"
+solana-sdk = "1.14.12"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
