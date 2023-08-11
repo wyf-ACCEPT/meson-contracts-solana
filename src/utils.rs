@@ -12,7 +12,7 @@ impl Utils {
     // Const variables
     pub const MESON_PROTOCOL_VERSION: u8 = 1;
 
-    pub const SHORT_COIN_TYPE: [u8; 2] = [1, 245]; // See https://github.com/satoshilabs/slips/blob/master/slip-0044.md, Solana is `800001f5` or `01f5`
+    pub const SHORT_COIN_TYPE: [u8; 2] = [0x01, 0xf5]; // See https://github.com/satoshilabs/slips/blob/master/slip-0044.md, Solana is `800001f5` or `01f5`
     pub const MAX_SWAP_AMOUNT: u64 = 100_000_000_000; // 100,000.000000 = 100k
     pub const MIN_BOND_TIME_PERIOD: u64 = 3600; // 1 hour
     pub const MAX_BOND_TIME_PERIOD: u64 = 7200; // 2 hours
@@ -96,7 +96,7 @@ impl Utils {
 
     // Functions to obtain values from encoded
     // version: [{0x01}, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81, 0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x02, 0x7d, 0x01, 0x02, 0xca, 0x21]
-    //          (In solidity/move: `[01]001dcd6500c00000000000f677815c000000000000634dcb98027d0102ca21`)
+    // (in solidity/move: `[01]001dcd6500c00000000000f677815c000000000000634dcb98027d0102ca21`)
     pub fn version_from(encoded_swap: [u8; 32]) -> u8 {
         encoded_swap[0]
     }
@@ -114,13 +114,19 @@ impl Utils {
         assert!(Self::version_from(encoded_swap) == Self::MESON_PROTOCOL_VERSION, "Invalid encoded version!");
     }
 
-    // pub fn for_initial_chain(encoded_swap: [u8; 32]) {
-    //     assert!(in_chain_from(encoded_swap) == SHORT_COIN_TYPE, ESWAP_IN_CHAIN_MISMATCH);
-    // }
+    pub fn for_initial_chain(encoded_swap: [u8; 32]) {
+        assert!(Self::in_chain_from(encoded_swap) == Self::SHORT_COIN_TYPE, "Swap in chain mismatch!");
+    }
 
-    // pub fn for_target_chain(encoded_swap: [u8; 32]) {
-    //     assert!(out_chain_from(encoded_swap) == SHORT_COIN_TYPE, ESWAP_OUT_CHAIN_MISMATCH);
-    // }
+    pub fn for_target_chain(encoded_swap: [u8; 32]) {
+        assert!(Self::out_chain_from(encoded_swap) == Self::SHORT_COIN_TYPE, "Swap out chain mismatch!");
+    }
+
+//     pub fn get_swap_id(encoded_swap: [u8; 32], initiator: vector<u8>) -> vector<u8> {
+//         let buf = copy encoded_swap;
+//         vector::append(&mut buf, initiator);
+//         aptos_hash::keccak256(buf)
+//     }
 
     // service fee: Default to 0.1% of amount
     pub fn service_fee(encoded_swap: [u8; 32]) -> u64 {
@@ -150,16 +156,37 @@ impl Utils {
         encoded_swap[6] & 0x08 == 0x08
     }
 
-    // fee for lp: [0x01, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81, 0x5c, {0x00, 0x00, 0x00, 0x00, 0x00}, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x02, 0x7d, 0x01, 0x02, 0xca, 0x21]
+    // fee for lp: [0x01, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81, 0x5c, {0x00, 0x00, 0x00, 0x00, 0x00}, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x02, 0x7d, 0x01, 0x02, 0xca, 0x21] -> 0
     pub fn fee_for_lp(encoded_swap: [u8; 32]) -> u64 {
         Self::u8_5_to_u64(*array_ref![encoded_swap, 16, 5])
     }
 
-    // expire timestamp: [0x01, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81, 0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, {0x00, 0x63, 0x4d, 0xcb, 0x98}, 0x02, 0x7d, 0x01, 0x02, 0xca, 0x21]
+    // expire timestamp: [0x01, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81, 0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, {0x00, 0x63, 0x4d, 0xcb, 0x98}, 0x02, 0x7d, 0x01, 0x02, 0xca, 0x21] -> 1_666_042_776
     pub fn expire_ts_from(encoded_swap: [u8; 32]) -> u64 {
         Self::u8_5_to_u64(*array_ref![encoded_swap, 21, 5])
     }
 
+
+
+    // target chain (slip44) -> [0x01, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81, 0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, {0x02, 0x7d}, 0x01, 0x02, 0xca, 0x21]
+    pub fn out_chain_from(encoded_swap: [u8; 32]) -> [u8; 2] {
+        *array_ref![encoded_swap, 26, 2]
+    }
+
+    // target coin index: [0x01, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81, 0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x02, 0x7d, {0x01}, 0x02, 0xca, 0x21]
+    pub fn out_coin_index_from(encoded_swap: [u8; 32]) -> u8 {
+        encoded_swap[28]
+    }
+
+    // source chain (slip44) -> [0x01, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81, 0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x02, 0x7d, 0x01, {0x02, 0xca}, 0x21]
+    pub fn in_chain_from(encoded_swap: [u8; 32]) -> [u8; 2] {
+        *array_ref![encoded_swap, 29, 2]
+    }
+
+    // source coin index: [0x01, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81, 0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x02, 0x7d, 0x01, 0x02, 0xca, {0x21}]
+    pub fn in_coin_index_from(encoded_swap: [u8; 32]) -> u8 {
+        encoded_swap[31]
+    }
 }
 
 
@@ -199,11 +226,6 @@ mod tests {
 
 //     const ETH_SIGN_HEADER: vector<u8> = b"\x19Ethereum Signed Message:\n32";
 
-//     pub fn get_swap_id(encoded_swap: [u8; 32], initiator: vector<u8>) -> vector<u8> {
-//         let buf = copy encoded_swap;
-//         vector::append(&mut buf, initiator);
-//         aptos_hash::keccak256(buf)
-//     }
 
 //     #[test]
 //     pub fn test_get_swap_id() {
@@ -218,26 +240,6 @@ mod tests {
 
 
 
-
-//     // target chain (slip44) -> `01|001dcd6500|c00000000000f677815c|0000000000|00634dcb98|[027d]0102ca21`
-//     pub fn out_chain_from(encoded_swap: [u8; 32]) -> vector<u8> {
-//         vector[*vector::borrow(&encoded_swap, 26), *vector::borrow(&encoded_swap, 27)]
-//     }
-
-//     // target coin index: `01|001dcd6500|c00000000000f677815c|0000000000|00634dcb98|027d[01]02ca21`
-//     pub fn out_coin_index_from(encoded_swap: [u8; 32]) -> u8 {
-//         *vector::borrow(&encoded_swap, 28)
-//     }
-
-//     // source chain (slip44) -> `01|001dcd6500|c00000000000f677815c|0000000000|00634dcb98|027d01[02ca]21`
-//     pub fn in_chain_from(encoded_swap: [u8; 32]) -> vector<u8> {
-//         vector[*vector::borrow(&encoded_swap, 29), *vector::borrow(&encoded_swap, 30)]
-//     }
-
-//     // source coin index: `01|001dcd6500|c00000000000f677815c|0000000000|00634dcb98|027d0102ca[21]`
-//     pub fn in_coin_index_from(encoded_swap: [u8; 32]) -> u8 {
-//         *vector::borrow(&encoded_swap, 31)
-//     }
 
 //     pub fn check_request_signature(
 //         encoded_swap: [u8; 32],
