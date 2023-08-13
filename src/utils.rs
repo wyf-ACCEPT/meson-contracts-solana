@@ -216,51 +216,54 @@ impl Utils {
             signing_data.extend_from_slice(&encoded_swap);
         } else {
             let msg_hash = keccak::hash(&encoded_swap);
-            signing_data.extend_from_slice(&Self::REQUEST_TYPE);
+            let request_type_hash = keccak::hash(&Self::REQUEST_TYPE);
+            signing_data.extend_from_slice(&request_type_hash.to_bytes());
             signing_data.extend_from_slice(&msg_hash.to_bytes());
         }
-        println!("{:?}", signing_data);
         let digest = keccak::hash(&signing_data).to_bytes();
-        println!("{:?}", digest);
+        let recovered = Self::recover_eth_address(digest, signature);
+        assert_eq!(recovered, signer_eth_addr, "Invalid signature!");
+    }
+    
+    pub fn check_release_signature(
+        encoded_swap: [u8; 32],
+        recipient: [u8; 20],
+        signature: [u8; 64],
+        signer_eth_addr: [u8; 20]
+    ) {
+        let non_typed = Self::sign_non_typed(encoded_swap);
+        let mut signing_data = Vec::new();
+
+        if Self::in_chain_from(encoded_swap) == [0x00, 0xc3] {
+            signing_data.extend_from_slice(if non_typed { &Self::TRON_SIGN_HEADER_53 } else { &Self::TRON_SIGN_HEADER });
+            signing_data.extend_from_slice(&encoded_swap);
+            signing_data.extend_from_slice(&recipient);
+        }
+        else if non_typed {
+            signing_data.extend_from_slice(&Self::ETH_SIGN_HEADER_52);
+            signing_data.extend_from_slice(&encoded_swap);
+            signing_data.extend_from_slice(&recipient);
+        } else {
+            let mut msg = [0 as u8; 52];
+            msg[..32].copy_from_slice(&encoded_swap);
+            msg[32..].copy_from_slice(&recipient);
+            let msg_hash = keccak::hash(&msg);
+            let release_type_hash;
+
+            if Self::out_chain_from(encoded_swap) == [0x00, 0xc3] {
+                release_type_hash = keccak::hash(&Self::RELEASE_TYPE_TRON);
+            } else {
+                release_type_hash = keccak::hash(&Self::RELEASE_TYPE);
+            }
+            signing_data.extend_from_slice(&release_type_hash.to_bytes());
+            signing_data.extend_from_slice(&msg_hash.to_bytes())
+        }
+        let digest = keccak::hash(&signing_data).to_bytes();
         let recovered = Self::recover_eth_address(digest, signature);
         assert_eq!(recovered, signer_eth_addr, "Invalid signature!");
     }
 
     
-//     pub fn check_release_signature(
-//         encoded_swap: [u8; 32],
-//         recipient: vector<u8>,
-//         signature: vector<u8>,
-//         signer_eth_addr: vector<u8>,
-//     ) {
-//         is_eth_addr(signer_eth_addr);
-//         let non_typed = sign_non_typed(encoded_swap);
-//         let signing_data: vector<u8>;
-//         if (in_chain_from(encoded_swap) == x"00c3") {
-//             signing_data = if (non_typed) TRON_SIGN_HEADER_53 else TRON_SIGN_HEADER;
-//             vector::append(&mut signing_data, encoded_swap);
-//             vector::append(&mut signing_data, recipient);
-//         } else if (non_typed) {
-//             signing_data = ETH_SIGN_HEADER_52;
-//             vector::append(&mut signing_data, encoded_swap);
-//             vector::append(&mut signing_data, recipient);
-//         } else {
-//             let msg = copy encoded_swap;
-//             vector::append(&mut msg, recipient);
-//             let msg_hash = aptos_hash::keccak256(msg);
-//             if (out_chain_from(encoded_swap) == x"00c3") {
-//                 signing_data = aptos_hash::keccak256(RELEASE_TYPE_TRON);
-//             } else {
-//                 signing_data = aptos_hash::keccak256(RELEASE_TYPE);
-//             };
-//             vector::append(&mut signing_data, msg_hash);
-//         };
-//         let digest = aptos_hash::keccak256(signing_data);
-
-//         let recovered = recover_eth_address(digest, signature);
-//         assert!(recovered == signer_eth_addr, EINVALID_SIGNATURE);
-//     }
-
     pub fn eth_address_from_solana_address(addr: Pubkey) -> [u8; 20] {
         let addr_bytes = addr.to_bytes();
         *array_ref![addr_bytes, 0, 20]
@@ -292,6 +295,7 @@ impl Utils {
         }
     }
 }
+
 
 
 /// Note that tests are not allowed in the `impl` block.
@@ -362,31 +366,13 @@ mod tests {
         let eth_addr = [0x2e, 0xf8, 0xa5, 0x1f, 0x8f, 0xf1, 0x29, 0xdb, 0xb8, 0x74, 0xa0, 0xef, 0xb0, 0x21, 0x70, 0x2f, 0x59, 0xc1, 0xb2, 0x11];
         Utils::check_request_signature(encoded_swap, signature, eth_addr);
     }
+
+    #[test]
+    fn test_check_release_signature() {
+        let encoded_swap = [0x01, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81, 0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x02, 0x7d, 0x01, 0x02, 0xca, 0x21];
+        let recipient = [0x01, 0x01, 0x5a, 0xce, 0x92, 0x0c, 0x71, 0x67, 0x94, 0x44, 0x59, 0x79, 0xbe, 0x68, 0xd4, 0x02, 0xd2, 0x8b, 0x28, 0x05];
+        let signature = [0x12, 0x05, 0x36, 0x1a, 0xab, 0xc8, 0x9e, 0x5b, 0x30, 0x59, 0x2a, 0x2c, 0x95, 0x59, 0x2d, 0xdc, 0x12, 0x70, 0x50, 0x61, 0x0e, 0xfe, 0x92, 0xff, 0x64, 0x55, 0xc5, 0xcf, 0xd4, 0x3b, 0xdd, 0x82, 0x58, 0x53, 0xed, 0xcf, 0x1f, 0xa7, 0x2f, 0x10, 0x99, 0x2b, 0x46, 0x72, 0x1d, 0x17, 0xcb, 0x31, 0x91, 0xa8, 0x5c, 0xef, 0xd2, 0xf8, 0x32, 0x5b, 0x1a, 0xc5, 0x9c, 0x7d, 0x49, 0x8f, 0xa2, 0x12];
+        let eth_addr = [0x2e, 0xf8, 0xa5, 0x1f, 0x8f, 0xf1, 0x29, 0xdb, 0xb8, 0x74, 0xa0, 0xef, 0xb0, 0x21, 0x70, 0x2f, 0x59, 0xc1, 0xb2, 0x11];
+        Utils::check_release_signature(encoded_swap, recipient, signature, eth_addr);
+    }
 }
-
-
-// /// @title MesonHelpers
-// /// @notice The class that provides helper functions for Meson protocol
-// module Meson::MesonHelpers {
-
-//     #[test]
-//     #[expected_failure(abort_code=EINVALID_SIGNATURE)]
-//     fn test_check_request_signature_error() {
-//         let encoded_swap = x"01001dcd6500c00000000000f677815c000000000000634dcb98027d0102ca21";
-//         let signature = x"b3184c257cf973069250eefd849a74d27250f8343cbda7615191149dd3c1b61d5d4e2b5ecc76a59baabf10a8d5d116edb95a5b2055b9b19f71524096975b29c3";
-//         let eth_addr = x"2ef8a51f8ff129dbb874a0efb021702f59c1b211";
-//         check_request_signature(encoded_swap, signature, eth_addr);
-//     }
-
-
-//     #[test]
-//     fn test_check_release_signature() {
-//         let encoded_swap = x"01001dcd6500c00000000000f677815c000000000000634dcb98027d0102ca21";
-//         let recipient = x"01015ace920c716794445979be68d402d28b2805";
-//         let signature = x"1205361aabc89e5b30592a2c95592ddc127050610efe92ff6455c5cfd43bdd825853edcf1fa72f10992b46721d17cb3191a85cefd2f8325b1ac59c7d498fa212";
-//         let eth_addr = x"2ef8a51f8ff129dbb874a0efb021702f59c1b211";
-//         check_release_signature(encoded_swap, recipient, signature, eth_addr);
-//     }
-
-
-// }
