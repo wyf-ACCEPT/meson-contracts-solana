@@ -1,8 +1,14 @@
 use arrayref::array_ref;
 use solana_program::{
-    program_error::ProgramError,
+    account_info::{AccountInfo, next_account_info},
     program_pack::{Pack, Sealed},
-    pubkey::Pubkey,
+    entrypoint::ProgramResult,
+    program_error::ProgramError,
+    program::invoke_signed,
+    pubkey::Pubkey, 
+    sysvar::{rent::Rent, Sysvar},
+    system_instruction, 
+    msg,
 };
 
 pub struct PostedSwap {
@@ -58,61 +64,42 @@ impl Pack for LockedSwap {
 }
 
 
-// use solana_program::{
-//     account_info::{next_account_info, AccountInfo},
-//     entrypoint::ProgramResult,
-//     msg,
-//     program::invoke_signed,
-//     pubkey::Pubkey,
-//     system_instruction,
-//     sysvar::{rent::Rent, Sysvar},
-// };
+pub fn write_some_data<'a>(
+    program_id: &Pubkey,
+    user_account: &'a AccountInfo<'a>,
+    map_account: &'a AccountInfo<'a>,
+    system_program: &'a AccountInfo<'a>,
+    data_length: usize,
+    phrase: &[u8],
+) -> ProgramResult {
+    let (map_pda, map_bump) = Pubkey::find_program_address(&[phrase, user_account.key.as_ref()], program_id);
 
-// pub fn change_state_try(
-//     program_id: &Pubkey,
-//     accounts: &[AccountInfo], // [user_account, map_account, system_program]
-//     _instruction_data: &[u8],
-// ) -> ProgramResult {
+    assert!(
+        map_pda != *map_account.key || !map_account.is_writable || !map_account.data_is_empty(),
+        "Map PDA error!"
+    );
 
-//     const DATA_LEN: usize = 2;
-//     let account_info_iter = &mut accounts.iter();
+    let rent = Rent::get()?; // Important!!
+    let rent_lamports = rent.minimum_balance(data_length);
 
-//     // the user doesn't need to be the signer
-//     let user_account = next_account_info(account_info_iter)?;
-//     let map_account = next_account_info(account_info_iter)?;
-//     let system_program = next_account_info(account_info_iter)?;
+    let create_map_ix = &system_instruction::create_account(
+        user_account.key,
+        map_account.key,
+        rent_lamports,
+        data_length as u64,
+        program_id,
+    );
 
-//     let (map_pda, map_bump) =
-//         Pubkey::find_program_address(&[b"map", user_account.key.as_ref()], program_id);
+    invoke_signed(
+        create_map_ix,
+        &[
+            user_account.clone(),
+            map_account.clone(),
+            system_program.clone(),
+        ],
+        &[&[b"map".as_ref(), user_account.key.as_ref(), &[map_bump]]],
+    )?;
 
-//     msg!("PDA: {} ({})", map_pda, map_bump);
+    Ok(())
+}
 
-//     if map_pda != *map_account.key || !map_account.is_writable || !map_account.data_is_empty() {
-//         return Err(solana_program::program_error::ProgramError::AccountDataTooSmall);
-//     }
-
-//     let rent = Rent::get()?; // Important!!
-//     let rent_lamports = rent.minimum_balance(DATA_LEN);
-
-//     let create_map_ix = &system_instruction::create_account(
-//         user_account.key,
-//         map_account.key,
-//         rent_lamports,
-//         DATA_LEN as u64,
-//         program_id,
-//     );
-
-//     msg!("-- Creating MapAccount account --");
-
-//     invoke_signed(
-//         create_map_ix,
-//         &[
-//             user_account.clone(),
-//             map_account.clone(),
-//             system_program.clone(),
-//         ],
-//         &[&[b"map".as_ref(), user_account.key.as_ref(), &[map_bump]]],
-//     )?;
-
-//     Ok(())
-// }
