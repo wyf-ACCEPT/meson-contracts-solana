@@ -4,19 +4,20 @@ const {
 } = require('@solana/web3.js');
 
 const privateKeyString = process.env.PRIVATE_KEY;
-const privateKeyBytes = privateKeyString.split(',').map(byteStr => parseInt(byteStr.trim(), 10));
-// const aliceSigner = Keypair.fromSecretKey(privateKeyBytes)
+const privateKeyBytes = new Uint8Array(privateKeyString.split(',').map(byteStr => parseInt(byteStr.trim(), 10)));
+const aliceSigner = Keypair.fromSecretKey(privateKeyBytes)
+console.log(aliceSigner)
 
-(async () => {
+// (async () => {
 
-  const url = 'https://api.devnet.solana.com'
-  const connection = new Connection(url, 'confirmed');
-  await connection.getVersion();
-  console.log(privateKeyBytes)
+//   const url = 'https://api.devnet.solana.com'
+//   const connection = new Connection(url, 'confirmed');
+//   await connection.getVersion();
+//   console.log(privateKeyBytes)
   
-  console.log('Private key bytes:', privateKeyBytes);
+//   console.log('Private key bytes:', privateKeyBytes);
   
-})()
+// })()
 
 
 // // Client

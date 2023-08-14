@@ -13,3 +13,4 @@ package-lock.json
 .env
 .vscode/
 .idea/
+key.json
