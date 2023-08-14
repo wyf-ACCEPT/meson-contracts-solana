@@ -1,3 +1,15 @@
-/target
-.vscode
-node_modules
+# Rust
+/target/
+Cargo.lock
+
+# Solana
+*.so
+
+# Node.js
+node_modules/
+package-lock.json
+
+# Other
+.env
+.vscode/
+.idea/
