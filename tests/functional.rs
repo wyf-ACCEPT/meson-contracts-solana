@@ -46,4 +46,12 @@ async fn test_write() {
         recent_blockhash
     );
     banks_client.process_transaction(transaction).await.unwrap();
+
+    let account_data = banks_client
+        .get_account(map_pda)
+        .await.unwrap().unwrap();
+    println!("{:?}", account_data);
+
+    assert!(false);
+
 }

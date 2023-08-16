@@ -8,7 +8,6 @@ use solana_program::{
     pubkey::Pubkey, 
     sysvar::{rent::Rent, Sysvar},
     system_instruction,
-    msg
 };
 
 pub struct PostedSwap {
@@ -77,9 +76,7 @@ pub fn write_some_data<'a, 'b>(
     assert!(
         !(map_pda != *map_account.key || !map_account.is_writable || !map_account.data_is_empty()),
         "Map PDA error!"
-    );
-
-    msg!("Map PDA account: {:?}", map_pda);
+    );      // todo
 
     let rent = Rent::get()?; // Important!!
     let rent_lamports = rent.minimum_balance(data_length);
