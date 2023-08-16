@@ -8,7 +8,7 @@ use crate::state::write_some_data;
 
 pub struct Processor {}
 impl Processor {
-    pub fn process<'a>(program_id: &Pubkey, accounts: &'a [AccountInfo<'a>], _input: &[u8]) -> ProgramResult {
+    pub fn process<'a>(program_id: &Pubkey, accounts: &[AccountInfo], _input: &[u8]) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let user_account = next_account_info(account_info_iter)?;
         let map_account = next_account_info(account_info_iter)?;

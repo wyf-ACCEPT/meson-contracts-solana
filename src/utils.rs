@@ -1,6 +1,6 @@
 /// This file is for the functions in `MesonHelpers`.
 /// Please note that:
-///     1. Hexstrings such as `encodedSwap` in Solidity/Move is given by u8array in Rust
+///     Hexstrings such as `encodedSwap` in Solidity/Move is given by u8array in Rust
 
 // use hex_string::HexString;
 
@@ -76,15 +76,15 @@ impl Utils {
         32, 102, 111, 114, 109, 97, 116, 41,
     ]; // That is "bytes32 Sign to release a swap on Mesonaddress Recipient (tron address in hex format)"
 
-    pub fn get_MIN_BOND_TIME_PERIOD() -> u64 {
+    pub fn get_min_bond_time_period() -> u64 {      // The function name must be lower case
         Self::MIN_BOND_TIME_PERIOD
     }
 
-    pub fn get_MAX_BOND_TIME_PERIOD() -> u64 {
+    pub fn get_max_bond_time_period() -> u64 {
         Self::MAX_BOND_TIME_PERIOD
     }
 
-    pub fn get_LOCK_TIME_PERIOD() -> u64 {
+    pub fn get_lock_time_period() -> u64 {
         Self::LOCK_TIME_PERIOD
     }
 
