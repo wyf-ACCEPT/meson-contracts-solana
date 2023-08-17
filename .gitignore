@@ -14,3 +14,4 @@ package-lock.json
 .vscode/
 .idea/
 key.json
+.DS_Store
