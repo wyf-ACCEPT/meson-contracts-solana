@@ -23,58 +23,19 @@ impl Utils {
     pub const MAX_BOND_TIME_PERIOD: u64 = 7200; // 2 hours
     pub const LOCK_TIME_PERIOD: u64 = 1200; // 20 minutes
 
-    pub const ETH_SIGN_HEADER: [u8; 28] = [
-        25, 69, 116, 104, 101, 114, 101, 117, 109, 32, 83, 105, 103, 110, 101, 100, 32, 77, 101,
-        115, 115, 97, 103, 101, 58, 10, 51, 50,
-    ]; // That is "\x19Ethereum Signed Message:\n32"
-    pub const ETH_SIGN_HEADER_52: [u8; 28] = [
-        25, 69, 116, 104, 101, 114, 101, 117, 109, 32, 83, 105, 103, 110, 101, 100, 32, 77, 101,
-        115, 115, 97, 103, 101, 58, 10, 53, 50,
-    ]; // That is "\x19Ethereum Signed Message:\n52"
-    pub const TRON_SIGN_HEADER: [u8; 25] = [
-        25, 84, 82, 79, 78, 32, 83, 105, 103, 110, 101, 100, 32, 77, 101, 115, 115, 97, 103, 101,
-        58, 10, 51, 50, 10,
-    ]; // That is "\x19TRON Signed Message:\n32\n"
-    pub const TRON_SIGN_HEADER_33: [u8; 25] = [
-        25, 84, 82, 79, 78, 32, 83, 105, 103, 110, 101, 100, 32, 77, 101, 115, 115, 97, 103, 101,
-        58, 10, 51, 51, 10,
-    ]; // That is "\x19TRON Signed Message:\n33\n"
-    pub const TRON_SIGN_HEADER_53: [u8; 25] = [
-        25, 84, 82, 79, 78, 32, 83, 105, 103, 110, 101, 100, 32, 77, 101, 115, 115, 97, 103, 101,
-        58, 10, 53, 51, 10,
-    ]; // That is "\x19TRON Signed Message:\n53\n"
+    pub const ETH_SIGN_HEADER: [u8; 28] = *b"\x19Ethereum Signed Message:\n32";
+    pub const ETH_SIGN_HEADER_52: [u8; 28] = *b"\x19Ethereum Signed Message:\n52";
+    pub const TRON_SIGN_HEADER: [u8; 25] = *b"\x19TRON Signed Message:\n32\n";
+    pub const TRON_SIGN_HEADER_33: [u8; 25] = *b"\x19TRON Signed Message:\n33\n";
+    pub const TRON_SIGN_HEADER_53: [u8; 25] = *b"\x19TRON Signed Message:\n53\n";
 
-    // pub const REQUEST_TYPE: [u8; 39] = [
-    //     98, 121, 116, 101, 115, 51, 50, 32, 83, 105, 103, 110, 32, 116, 111, 32, 114, 101, 113, 117,
-    //     101, 115, 116, 32, 97, 32, 115, 119, 97, 112, 32, 111, 110, 32, 77, 101, 115, 111, 110,
-    // ]; // That is "bytes32 Sign to request a swap on Meson"
+    // pub const REQUEST_TYPE: [u8; 39] = *b"bytes32 Sign to request a swap on Meson";
+    pub const REQUEST_TYPE: [u8; 49] = *b"bytes32 Sign to request a swap on Meson (Testnet)";
 
-    pub const REQUEST_TYPE: [u8; 49] = [
-        98, 121, 116, 101, 115, 51, 50, 32, 83, 105, 103, 110, 32, 116, 111, 32, 114, 101, 113,
-        117, 101, 115, 116, 32, 97, 32, 115, 119, 97, 112, 32, 111, 110, 32, 77, 101, 115, 111,
-        110, 32, 40, 84, 101, 115, 116, 110, 101, 116, 41,
-    ]; // That is "bytes32 Sign to request a swap on Meson (Testnet)"
+    // pub const RELEASE_TYPE: [u8; 56] = *b"bytes32 Sign to release a swap on Mesonaddress Recipient";
+    pub const RELEASE_TYPE: [u8; 66] = *b"bytes32 Sign to release a swap on Meson (Testnet)address Recipient";
 
-    // pub const RELEASE_TYPE: [u8; 56] = [
-    //     98, 121, 116, 101, 115, 51, 50, 32, 83, 105, 103, 110, 32, 116, 111, 32, 114, 101, 108, 101,
-    //     97, 115, 101, 32, 97, 32, 115, 119, 97, 112, 32, 111, 110, 32, 77, 101, 115, 111, 110, 97, 100,
-    //     100, 114, 101, 115, 115, 32, 82, 101, 99, 105, 112, 105, 101, 110, 116,
-    // ]; // That is "bytes32 Sign to release a swap on Mesonaddress Recipient"
-
-    pub const RELEASE_TYPE: [u8; 66] = [
-        98, 121, 116, 101, 115, 51, 50, 32, 83, 105, 103, 110, 32, 116, 111, 32, 114, 101, 108,
-        101, 97, 115, 101, 32, 97, 32, 115, 119, 97, 112, 32, 111, 110, 32, 77, 101, 115, 111, 110,
-        32, 40, 84, 101, 115, 116, 110, 101, 116, 41, 97, 100, 100, 114, 101, 115, 115, 32, 82,
-        101, 99, 105, 112, 105, 101, 110, 116,
-    ]; // That is "bytes32 Sign to release a swap on Meson (Testnet)address Recipient"
-
-    pub const RELEASE_TYPE_TRON: [u8; 85] = [
-        98, 121, 116, 101, 115, 51, 50, 32, 83, 105, 103, 110, 32, 116, 111, 32, 114, 101, 108,
-        101, 97, 115, 101, 32, 97, 32, 115, 119, 97, 112, 32, 111, 110, 32, 77, 101, 115, 111, 110,
-        97, 100, 100, 114, 101, 115, 115, 32, 82, 101, 99, 105, 112, 105, 101, 110, 116, 32, 40,
-        116, 114, 111, 110, 32, 97, 100, 100, 114, 101, 115, 115, 32, 105, 110, 32, 104, 101, 120,
-        32, 102, 111, 114, 109, 97, 116, 41,
-    ]; // That is "bytes32 Sign to release a swap on Mesonaddress Recipient (tron address in hex format)"
+    pub const RELEASE_TYPE_TRON: [u8; 85] = *b"bytes32 Sign to release a swap on Mesonaddress Recipient (tron address in hex format)";
 
     pub fn get_min_bond_time_period() -> u64 {      // The function name must be lower case
         Self::MIN_BOND_TIME_PERIOD

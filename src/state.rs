@@ -10,6 +10,17 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
 };
 
+pub struct ConstantValue {}
+
+impl ConstantValue {
+    const AUTHORITY_PHRASE: &[u8] = b"authority";
+    const SUPPORT_COINS_PHRASE: &[u8] = b"supported_coins";
+    const POSTED_SWAP_PHRASE: &[u8] = b"posted_swaps";
+    const LOCKED_SWAP_PHRASE: &[u8] = b"locked_swaps";
+    const POOL_OWNERS_PHRASE: &[u8] = b"pool_owners";
+    const POOL_OF_AUTHORIZED_ADDR_PHRASE: &[u8] = b"pool_of_authorized_addr";
+}
+
 pub struct PostedSwap {
     pool_index: u64,
     initiator: [u8; 20],
@@ -62,17 +73,17 @@ impl Pack for LockedSwap {
     }
 }
 
-pub fn write_some_data<'a, 'b>(
+pub fn create_related_account_specified_owner<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
     map_account: &'a AccountInfo<'b>,
     system_program: &'a AccountInfo<'b>,
-    data_length: usize,
     phrase_prefix: &[u8],
     phrase: &[u8],
+    data_length: usize,
+    owner: &Pubkey,
 ) -> ProgramResult {
     let (map_pda, map_bump) = Pubkey::find_program_address(&[phrase_prefix, phrase], program_id);
-
     assert!(
         !(map_pda != *map_account.key || !map_account.is_writable || !map_account.data_is_empty()),
         "Map PDA error!"
@@ -86,7 +97,7 @@ pub fn write_some_data<'a, 'b>(
         map_account.key,
         rent_lamports,
         data_length as u64,
-        program_id,
+        owner,
     );
 
     invoke_signed(
@@ -96,12 +107,75 @@ pub fn write_some_data<'a, 'b>(
             map_account.clone(),
             system_program.clone(),
         ],
-        &[&[
-            phrase_prefix.as_ref(),
-            phrase.as_ref(),
-            &[map_bump],
-        ]],
+        &[&[phrase_prefix.as_ref(), phrase.as_ref(), &[map_bump]]],
     )?;
 
+    Ok(())
+}
+
+pub fn create_related_account<'a, 'b>(
+    program_id: &Pubkey,
+    payer_account: &'a AccountInfo<'b>,
+    map_account: &'a AccountInfo<'b>,
+    system_program: &'a AccountInfo<'b>,
+    phrase_prefix: &[u8],
+    phrase: &[u8],
+    data_length: usize,
+) -> ProgramResult {
+    create_related_account_specified_owner(
+        program_id,
+        payer_account,
+        map_account,
+        system_program,
+        phrase_prefix,
+        phrase,
+        data_length,
+        program_id,
+    )
+}
+
+pub fn write_related_account<'a, 'b>(
+    map_account: &'a AccountInfo<'b>,
+    content: &[u8],
+) -> ProgramResult {
+    // // Don't need to check beacuse only this program can rewrite the value
+    // let (map_pda, _) = Pubkey::find_program_address(&[phrase_prefix, phrase], program_id);
+    // assert!(
+    //     !(map_pda != *map_account.key || !map_account.is_writable),
+    //     "Map PDA error!"
+    // );
+
+    let mut account_data = map_account.data.borrow_mut();
+    account_data.copy_from_slice(content);
+
+    Ok(())
+}
+
+pub fn init_contract<'a, 'b>(
+    program_id: &Pubkey,
+    payer_account: &'a AccountInfo<'b>,
+    map_token_account: &'a AccountInfo<'b>,
+    authority_account: &'a AccountInfo<'b>,
+    system_program: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    create_related_account_specified_owner(
+        program_id,
+        payer_account, // This is the Admin of Meson contracts!
+        authority_account,
+        system_program,
+        ConstantValue::AUTHORITY_PHRASE,
+        b"",
+        0,
+        payer_account.key,
+    )?;
+    create_related_account(
+        program_id,
+        payer_account,
+        map_token_account,
+        system_program,
+        ConstantValue::SUPPORT_COINS_PHRASE,
+        b"",
+        32 * 16, // We support at most 16 coins.
+    )?;
     Ok(())
 }
