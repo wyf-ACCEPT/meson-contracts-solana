@@ -22,13 +22,13 @@ async fn test_write() {
         processor!(process_instruction),
     ).start().await;
 
-    let user_account = payer.pubkey();
-    // let user_account = Pubkey::new_unique();
+    let payer_account = payer.pubkey();
+    // let payer_account = Pubkey::new_unique();
     let (map_pda, _) =
-        Pubkey::find_program_address(&[b"hello", user_account.as_ref()], &program_id);
+        Pubkey::find_program_address(&[b"hello", b"world"], &program_id);
 
     println!("Program ID: {}", program_id);
-    println!("{:?}", program_id.as_ref());
+    // println!("{:?}", program_id.as_ref());
 
     let transaction = Transaction::new_signed_with_payer(
         &[
@@ -36,7 +36,7 @@ async fn test_write() {
                 program_id, 
                 &(), 
                 vec![
-                    AccountMeta::new(user_account, false),
+                    AccountMeta::new(payer_account, false),
                     AccountMeta::new(map_pda, false),
                     AccountMeta::new(system_program::id(), false),
                 ])
@@ -52,6 +52,5 @@ async fn test_write() {
         .await.unwrap().unwrap();
     println!("{:?}", account_data);
 
-    assert!(false);
-
+    // assert!(false);
 }

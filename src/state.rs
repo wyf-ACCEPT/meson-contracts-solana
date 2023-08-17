@@ -1,13 +1,13 @@
 use arrayref::array_ref;
 use solana_program::{
     account_info::AccountInfo,
-    program_pack::{Pack, Sealed},
     entrypoint::ProgramResult,
-    program_error::ProgramError,
     program::invoke_signed,
-    pubkey::Pubkey, 
-    sysvar::{rent::Rent, Sysvar},
+    program_error::ProgramError,
+    program_pack::{Pack, Sealed},
+    pubkey::Pubkey,
     system_instruction,
+    sysvar::{rent::Rent, Sysvar},
 };
 
 pub struct PostedSwap {
@@ -62,27 +62,27 @@ impl Pack for LockedSwap {
     }
 }
 
-
 pub fn write_some_data<'a, 'b>(
     program_id: &Pubkey,
-    user_account: &'a AccountInfo<'b>,
+    payer_account: &'a AccountInfo<'b>,
     map_account: &'a AccountInfo<'b>,
     system_program: &'a AccountInfo<'b>,
     data_length: usize,
+    phrase_prefix: &[u8],
     phrase: &[u8],
 ) -> ProgramResult {
-    let (map_pda, map_bump) = Pubkey::find_program_address(&[phrase, user_account.key.as_ref()], program_id);
+    let (map_pda, map_bump) = Pubkey::find_program_address(&[phrase_prefix, phrase], program_id);
 
     assert!(
         !(map_pda != *map_account.key || !map_account.is_writable || !map_account.data_is_empty()),
         "Map PDA error!"
-    );      // todo
+    ); // todo
 
     let rent = Rent::get()?; // Important!!
     let rent_lamports = rent.minimum_balance(data_length);
 
     let create_map_ix = &system_instruction::create_account(
-        user_account.key,
+        payer_account.key,
         map_account.key,
         rent_lamports,
         data_length as u64,
@@ -92,13 +92,16 @@ pub fn write_some_data<'a, 'b>(
     invoke_signed(
         create_map_ix,
         &[
-            user_account.clone(),
+            payer_account.clone(),
             map_account.clone(),
             system_program.clone(),
         ],
-        &[&[phrase.as_ref(), user_account.key.as_ref(), &[map_bump]]],
+        &[&[
+            phrase_prefix.as_ref(),
+            phrase.as_ref(),
+            &[map_bump],
+        ]],
     )?;
 
     Ok(())
 }
-
