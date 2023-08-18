@@ -8,6 +8,7 @@ use solana_program::{
     pubkey::Pubkey,
     system_instruction,
     sysvar::{rent::Rent, Sysvar},
+    msg
 };
 
 pub struct ConstantValue {}
@@ -113,7 +114,7 @@ pub fn create_related_account_specified_owner<'a, 'b>(
     Ok(())
 }
 
-pub fn create_related_account<'a, 'b>(
+fn create_related_account<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
     map_account: &'a AccountInfo<'b>,
@@ -134,7 +135,7 @@ pub fn create_related_account<'a, 'b>(
     )
 }
 
-pub fn write_related_account<'a, 'b>(
+fn write_related_account<'a, 'b>(
     map_account: &'a AccountInfo<'b>,
     content: &[u8],
 ) -> ProgramResult {
@@ -179,3 +180,33 @@ pub fn init_contract<'a, 'b>(
     )?;
     Ok(())
 }
+
+pub fn transfer_premium_manager<'a, 'b>(
+    program_id: &Pubkey,
+    admin_account: &'a AccountInfo<'b>,
+    authority_account: &'a AccountInfo<'b>,
+    new_admin: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    let (authority_expected, _) = Pubkey::find_program_address(&[ConstantValue::AUTHORITY_PHRASE], program_id);
+    assert!(
+        !(authority_expected != *authority_account.key || !authority_account.is_writable),
+        "Authority account not correct!"
+    );
+    assert!(admin_account.is_signer == true, "Admin should sign this transaction!");
+    authority_account.assign(&new_admin.key);
+    Ok(())
+}
+
+// // Named consistently with solidity contracts
+// public entry fun transferPremiumManager(
+//     sender: &signer,
+//     new_premium_manager: address,
+// ) acquires GeneralStore {
+//     let store = borrow_global_mut<GeneralStore>(DEPLOYER);
+//     let pool_owners = &mut store.pool_owners;
+//     let old_premium_manager = table::remove(pool_owners, 0);
+
+//     assert!(signer::address_of(sender) == old_premium_manager, EUNAUTHORIZED);
+
+//     table::add(pool_owners, 0, new_premium_manager);
+// }
