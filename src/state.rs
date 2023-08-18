@@ -2,13 +2,13 @@ use arrayref::array_ref;
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
+    msg,
     program::invoke_signed,
     program_error::ProgramError,
     program_pack::{Pack, Sealed},
     pubkey::Pubkey,
     system_instruction,
     sysvar::{rent::Rent, Sysvar},
-    msg
 };
 
 pub struct ConstantValue {}
@@ -74,7 +74,7 @@ impl Pack for LockedSwap {
     }
 }
 
-pub fn create_related_account_specified_owner<'a, 'b>(
+pub fn create_related_account<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
     map_account: &'a AccountInfo<'b>,
@@ -82,7 +82,6 @@ pub fn create_related_account_specified_owner<'a, 'b>(
     phrase_prefix: &[u8],
     phrase: &[u8],
     data_length: usize,
-    owner: &Pubkey,
 ) -> ProgramResult {
     let (map_pda, map_bump) = Pubkey::find_program_address(&[phrase_prefix, phrase], program_id);
     assert!(
@@ -98,7 +97,7 @@ pub fn create_related_account_specified_owner<'a, 'b>(
         map_account.key,
         rent_lamports,
         data_length as u64,
-        owner,
+        program_id,
     );
 
     invoke_signed(
@@ -112,27 +111,6 @@ pub fn create_related_account_specified_owner<'a, 'b>(
     )?;
 
     Ok(())
-}
-
-fn create_related_account<'a, 'b>(
-    program_id: &Pubkey,
-    payer_account: &'a AccountInfo<'b>,
-    map_account: &'a AccountInfo<'b>,
-    system_program: &'a AccountInfo<'b>,
-    phrase_prefix: &[u8],
-    phrase: &[u8],
-    data_length: usize,
-) -> ProgramResult {
-    create_related_account_specified_owner(
-        program_id,
-        payer_account,
-        map_account,
-        system_program,
-        phrase_prefix,
-        phrase,
-        data_length,
-        program_id,
-    )
 }
 
 fn write_related_account<'a, 'b>(
@@ -159,16 +137,16 @@ pub fn init_contract<'a, 'b>(
     authority_account: &'a AccountInfo<'b>,
     system_program: &'a AccountInfo<'b>,
 ) -> ProgramResult {
-    create_related_account_specified_owner(
+    create_related_account(
         program_id,
         payer_account, // This is the Admin of Meson contracts!
         authority_account,
         system_program,
         ConstantValue::AUTHORITY_PHRASE,
         b"",
-        0,
-        payer_account.key,
+        32, // To save the admin address
     )?;
+    write_related_account(authority_account, payer_account.key.as_ref())?;
     create_related_account(
         program_id,
         payer_account,
@@ -187,13 +165,22 @@ pub fn transfer_premium_manager<'a, 'b>(
     authority_account: &'a AccountInfo<'b>,
     new_admin: &'a AccountInfo<'b>,
 ) -> ProgramResult {
-    let (authority_expected, _) = Pubkey::find_program_address(&[ConstantValue::AUTHORITY_PHRASE], program_id);
+    let (authority_expected, _) =
+        Pubkey::find_program_address(&[ConstantValue::AUTHORITY_PHRASE], program_id);
     assert!(
         !(authority_expected != *authority_account.key || !authority_account.is_writable),
         "Authority account not correct!"
     );
-    assert!(admin_account.is_signer == true, "Admin should sign this transaction!");
-    authority_account.assign(&new_admin.key);
+    assert!(
+        admin_account.is_signer == true,
+        "Admin should sign this transaction!"
+    );
+    assert!(
+        *authority_account.data.borrow() == admin_account.key.as_ref(),
+        "Admin should be the data saved in authority account!"
+    );
+    write_related_account(authority_account, new_admin.key.as_ref())?;
+
     Ok(())
 }
 

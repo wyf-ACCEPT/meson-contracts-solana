@@ -1,6 +1,5 @@
+use arrayref::array_ref;
 use std::str::FromStr;
-
-use solana_sdk::account::ReadableAccount;
 
 use {
     meson_contracts_solana::entrypoint::process_instruction,
@@ -10,7 +9,11 @@ use {
         system_program,
     },
     solana_program_test::*,
-    solana_sdk::{account::Account, signature::Signer, transaction::Transaction},
+    solana_sdk::{
+        account::{Account, ReadableAccount},
+        signature::{Keypair, Signer},
+        transaction::Transaction,
+    },
 };
 
 async fn get_account_info(banks_client: &mut BanksClient, account: Pubkey) -> Account {
@@ -62,11 +65,13 @@ async fn test_write() {
     );
     banks_client.process_transaction(transaction).await.unwrap();
 
+    println!("\n================== Init Contract ==================");
     println!("Program   pubkey: {}", program_id);
     println!("Payer     pubkey: {}", payer_account);
+    let authority_info = get_account_info(&mut banks_client, auth_pda).await;
     println!(
         "Current   admin : {}",
-        get_account_info(&mut banks_client, auth_pda).await.owner()
+        Pubkey::from(*array_ref![authority_info.data(), 0, 32])
     );
 
     // show_account_info(&mut banks_client, payer_account).await;
@@ -79,7 +84,7 @@ async fn test_write() {
     // =                            Transfer Admin                         =
     // =                                                                   =
     // =====================================================================
-    let new_admin = Pubkey::new_unique();
+    let new_admin = Keypair::new();
     let recent_blockhash = banks_client
         .get_new_latest_blockhash(&recent_blockhash)
         .await
@@ -91,7 +96,7 @@ async fn test_write() {
             vec![
                 AccountMeta::new(payer_account, false),
                 AccountMeta::new(auth_pda, false),
-                AccountMeta::new(new_admin, false),
+                AccountMeta::new(new_admin.pubkey(), false),
             ],
         )],
         Some(&payer.pubkey()),
@@ -100,6 +105,12 @@ async fn test_write() {
     );
     banks_client.process_transaction(transaction).await.unwrap();
 
-    println!("HERE");
+    println!("\n================== Transfer Admin ==================");
+    let authority_info = get_account_info(&mut banks_client, auth_pda).await;
+    println!("New       pubkey: {}", new_admin.pubkey());
+    println!(
+        "New       admin : {}",
+        Pubkey::from(*array_ref![authority_info.data(), 0, 32])
+    );
     assert!(false); // to see the logs
 }
