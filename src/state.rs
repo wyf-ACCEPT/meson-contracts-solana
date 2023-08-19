@@ -173,11 +173,11 @@ pub fn transfer_premium_manager<'a, 'b>(
     );
     assert!(
         admin_account.is_signer == true,
-        "Admin should sign this transaction!"
+        "Admin account should sign this transaction!"
     );
     assert!(
         *authority_account.data.borrow() == admin_account.key.as_ref(),
-        "Admin should be the data saved in authority account!"
+        "Admin account should be the data saved in authority account!"
     );
     write_related_account(authority_account, new_admin.key.as_ref())?;
 

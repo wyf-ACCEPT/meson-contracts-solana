@@ -1,9 +1,11 @@
 use arrayref::array_ref;
+use solana_program::system_instruction;
 use std::str::FromStr;
 
 use {
     meson_contracts_solana::entrypoint::process_instruction,
     solana_program::{
+        hash::Hash,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         system_program,
@@ -20,13 +22,20 @@ async fn get_account_info(banks_client: &mut BanksClient, account: Pubkey) -> Ac
     banks_client.get_account(account).await.unwrap().unwrap()
 }
 
-async fn show_account_info(banks_client: &mut BanksClient, account: Pubkey) {
-    let program_id_data = get_account_info(banks_client, account).await;
-    println!(
-        "[AccountInfo {}]\nProgram data: {:?}\n",
-        account, program_id_data
-    );
+async fn update_blockhash(banks_client: &mut BanksClient, recent_blockhash: Hash) -> Hash {
+    banks_client
+        .get_new_latest_blockhash(&recent_blockhash)
+        .await
+        .unwrap()
 }
+
+// async fn show_account_info(banks_client: &mut BanksClient, account: Pubkey) {
+//     let program_id_data = get_account_info(banks_client, account).await;
+//     println!(
+//         "[AccountInfo {}]\nProgram data: {:?}\n",
+//         account, program_id_data
+//     );
+// }
 
 #[tokio::test]
 async fn test_write() {
@@ -85,20 +94,20 @@ async fn test_write() {
     // =                                                                   =
     // =====================================================================
     let new_admin = Keypair::new();
-    let recent_blockhash = banks_client
-        .get_new_latest_blockhash(&recent_blockhash)
-        .await
-        .unwrap();
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
     let transaction = Transaction::new_signed_with_payer(
-        &[Instruction::new_with_bincode(
-            program_id,
-            &[1 as u8],
-            vec![
-                AccountMeta::new(payer_account, false),
-                AccountMeta::new(auth_pda, false),
-                AccountMeta::new(new_admin.pubkey(), false),
-            ],
-        )],
+        &[
+            Instruction::new_with_bincode(
+                program_id,
+                &[1 as u8],
+                vec![
+                    AccountMeta::new(payer_account, false),
+                    AccountMeta::new(auth_pda, false),
+                    AccountMeta::new(new_admin.pubkey(), false),
+                ],
+            ),
+            system_instruction::transfer(&payer_account, &new_admin.pubkey(), 500000000),
+        ],
         Some(&payer.pubkey()),
         &[&payer],
         recent_blockhash,
@@ -109,8 +118,33 @@ async fn test_write() {
     let authority_info = get_account_info(&mut banks_client, auth_pda).await;
     println!("New       pubkey: {}", new_admin.pubkey());
     println!(
-        "New       admin : {}",
-        Pubkey::from(*array_ref![authority_info.data(), 0, 32])
+        "New       admin : {} (balance: {})",
+        Pubkey::from(*array_ref![authority_info.data(), 0, 32]),
+        banks_client.get_balance(new_admin.pubkey()).await.unwrap()
     );
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[Instruction::new_with_bincode(
+            program_id,
+            &[1 as u8],
+            vec![
+                AccountMeta::new(new_admin.pubkey(), false),
+                AccountMeta::new(auth_pda, false),
+                AccountMeta::new(payer_account, false),
+            ],
+        )],
+        Some(&new_admin.pubkey()),
+        &[&new_admin],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+    let authority_info = get_account_info(&mut banks_client, auth_pda).await;
+    println!(
+        "Admin trans-back: {} (balance: {})",
+        Pubkey::from(*array_ref![authority_info.data(), 0, 32]),
+        banks_client.get_balance(payer_account).await.unwrap()
+    );
+
     assert!(false); // to see the logs
 }
