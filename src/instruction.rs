@@ -31,8 +31,4 @@ impl MesonInstruction {
             _ => return Err(MesonError::InvalidInstruction),
         })
     }
-
-    pub fn pack(&self) -> Vec<u8> {
-        Vec::new()
-    }
 }

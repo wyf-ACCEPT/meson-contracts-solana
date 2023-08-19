@@ -7,7 +7,7 @@ use solana_program::{
 // use crate::state::{create_related_account, write_related_account};
 use crate::{
     instruction::MesonInstruction,
-    state::{init_contract, transfer_premium_manager},
+    state::{init_contract, transfer_admin},
 };
 
 pub struct Processor {}
@@ -46,6 +46,6 @@ impl Processor {
         let authority_account = next_account_info(account_info_iter)?;
         let new_admin = next_account_info(account_info_iter)?;
 
-        transfer_premium_manager(program_id, admin_account, authority_account, new_admin)
+        transfer_admin(program_id, admin_account, authority_account, new_admin)
     }
 }

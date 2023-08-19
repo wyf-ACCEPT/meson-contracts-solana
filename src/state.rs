@@ -2,7 +2,6 @@ use arrayref::array_ref;
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
-    msg,
     program::invoke_signed,
     program_error::ProgramError,
     program_pack::{Pack, Sealed},
@@ -10,6 +9,8 @@ use solana_program::{
     system_instruction,
     sysvar::{rent::Rent, Sysvar},
 };
+
+use crate::error::MesonError;
 
 pub struct ConstantValue {}
 
@@ -84,10 +85,18 @@ pub fn create_related_account<'a, 'b>(
     data_length: usize,
 ) -> ProgramResult {
     let (map_pda, map_bump) = Pubkey::find_program_address(&[phrase_prefix, phrase], program_id);
-    assert!(
-        !(map_pda != *map_account.key || !map_account.is_writable || !map_account.data_is_empty()),
-        "Map PDA error!"
-    ); // todo
+
+    if map_pda != *map_account.key {
+        return Err(MesonError::PdaAccountMismatch.into());
+    }
+
+    if !map_account.is_writable {
+        return Err(MesonError::PdaAccountNotWritable.into());
+    }
+
+    if !map_account.data_is_empty() {
+        return Err(MesonError::PdaAccountAlreadyCreated.into());
+    }
 
     let rent = Rent::get()?; // Important!!
     let rent_lamports = rent.minimum_balance(data_length);
@@ -159,7 +168,7 @@ pub fn init_contract<'a, 'b>(
     Ok(())
 }
 
-pub fn transfer_premium_manager<'a, 'b>(
+pub fn transfer_admin<'a, 'b>(
     program_id: &Pubkey,
     admin_account: &'a AccountInfo<'b>,
     authority_account: &'a AccountInfo<'b>,
@@ -167,33 +176,50 @@ pub fn transfer_premium_manager<'a, 'b>(
 ) -> ProgramResult {
     let (authority_expected, _) =
         Pubkey::find_program_address(&[ConstantValue::AUTHORITY_PHRASE], program_id);
-    assert!(
-        !(authority_expected != *authority_account.key || !authority_account.is_writable),
-        "Authority account not correct!"
-    );
-    assert!(
-        admin_account.is_signer == true,
-        "Admin account should sign this transaction!"
-    );
-    assert!(
-        *authority_account.data.borrow() == admin_account.key.as_ref(),
-        "Admin account should be the data saved in authority account!"
-    );
-    write_related_account(authority_account, new_admin.key.as_ref())?;
 
+    if authority_expected != *authority_account.key {
+        return Err(MesonError::PdaAccountMismatch.into());
+    }
+    if !authority_account.is_writable {
+        return Err(MesonError::PdaAccountNotWritable.into());
+    }
+    if !admin_account.is_signer || (*authority_account.data.borrow() != admin_account.key.as_ref())
+    {
+        return Err(MesonError::AdminNotSigner.into());
+    }
+    write_related_account(authority_account, new_admin.key.as_ref())?;
     Ok(())
 }
 
-// // Named consistently with solidity contracts
-// public entry fun transferPremiumManager(
+// transferPremiumManager todo()
+
+pub fn addSupportToken<'a, 'b>(
+    program_id: &Pubkey,
+    admin_account: &'a AccountInfo<'b>,
+    authority_account: &'a AccountInfo<'b>,
+    token_mint_account: &'a AccountInfo<'b>,
+    coin_index: u8,
+) -> ProgramResult {
+    Ok(())
+}
+
+// public entry fun addSupportToken<CoinType>(
 //     sender: &signer,
-//     new_premium_manager: address,
+//     coin_index: u8,
 // ) acquires GeneralStore {
+//     let sender_addr = signer::address_of(sender);
+//     assert!(sender_addr == DEPLOYER, ENOT_DEPLOYER);
+
 //     let store = borrow_global_mut<GeneralStore>(DEPLOYER);
-//     let pool_owners = &mut store.pool_owners;
-//     let old_premium_manager = table::remove(pool_owners, 0);
+//     let supported_coins = &mut store.supported_coins;
+//     if (table::contains(supported_coins, coin_index)) {
+//         table::remove(supported_coins, coin_index);
+//     };
+//     table::add(supported_coins, coin_index, type_info::type_of<CoinType>());
 
-//     assert!(signer::address_of(sender) == old_premium_manager, EUNAUTHORIZED);
-
-//     table::add(pool_owners, 0, new_premium_manager);
+//     let coin_store = StoreForCoin<CoinType> {
+//         in_pool_coins: table::new<u64, Coin<CoinType>>(),
+//         pending_coins: table::new<vector<u8>, Coin<CoinType>>(),
+//     };
+//     move_to<StoreForCoin<CoinType>>(sender, coin_store);
 // }
