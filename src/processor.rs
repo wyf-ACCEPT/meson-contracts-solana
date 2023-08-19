@@ -7,7 +7,7 @@ use solana_program::{
 // use crate::state::{create_related_account, write_related_account};
 use crate::{
     instruction::MesonInstruction,
-    state::{init_contract, transfer_admin},
+    state::{init_contract, transfer_admin, add_support_token},
 };
 
 pub struct Processor {}
@@ -18,6 +18,9 @@ impl Processor {
             MesonInstruction::InitContract => Self::process_init_contract(program_id, accounts),
             MesonInstruction::TransferPremiumManager => {
                 Self::process_transfer_admin(program_id, accounts)
+            }
+            MesonInstruction::AddSupportToken { coin_index } => {
+                Self::process_add_support_token(program_id, accounts, coin_index)
             }
         }
     }
@@ -47,5 +50,16 @@ impl Processor {
         let new_admin = next_account_info(account_info_iter)?;
 
         transfer_admin(program_id, admin_account, authority_account, new_admin)
+    }
+
+    fn process_add_support_token(program_id: &Pubkey, accounts: &[AccountInfo], coin_index: u8) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        let admin_account = next_account_info(account_info_iter)?;
+        let authority_account = next_account_info(account_info_iter)?;
+        let map_token_account = next_account_info(account_info_iter)?;
+        let token_mint_account = next_account_info(account_info_iter)?;
+        
+        add_support_token(program_id, admin_account, authority_account, map_token_account, token_mint_account, coin_index)
     }
 }

@@ -1,4 +1,4 @@
-use arrayref::array_ref;
+use arrayref::{array_ref, array_refs};
 use solana_program::system_instruction;
 use std::str::FromStr;
 
@@ -38,7 +38,7 @@ async fn update_blockhash(banks_client: &mut BanksClient, recent_blockhash: Hash
 // }
 
 #[tokio::test]
-async fn test_write() {
+async fn test_all() {
     let program_id = Pubkey::from_str("Meson11111111111111111111111111111111111111").unwrap();
     let (mut banks_client, payer, recent_blockhash) = ProgramTest::new(
         "meson_contracts_solana",
@@ -56,7 +56,7 @@ async fn test_write() {
     // =                                                                   =
     // =====================================================================
     let (auth_pda, _) = Pubkey::find_program_address(&[b"authority"], &program_id);
-    let (token_pda, _) = Pubkey::find_program_address(&[b"supported_coins"], &program_id);
+    let (token_list_pda, _) = Pubkey::find_program_address(&[b"supported_coins"], &program_id);
     let transaction = Transaction::new_signed_with_payer(
         &[Instruction::new_with_bincode(
             program_id,
@@ -64,7 +64,7 @@ async fn test_write() {
             vec![
                 AccountMeta::new(payer_account, false),
                 AccountMeta::new(auth_pda, false),
-                AccountMeta::new(token_pda, false),
+                AccountMeta::new(token_list_pda, false),
                 AccountMeta::new(system_program::id(), false),
             ],
         )],
@@ -85,7 +85,7 @@ async fn test_write() {
 
     // show_account_info(&mut banks_client, payer_account).await;
     // show_account_info(&mut banks_client, auth_pda).await;
-    // show_account_info(&mut banks_client, token_pda).await;
+    // show_account_info(&mut banks_client, token_list_pda).await;
     // show_account_info(&mut banks_client, program_id).await;
 
     // =====================================================================
@@ -146,5 +146,56 @@ async fn test_write() {
         banks_client.get_balance(payer_account).await.unwrap()
     );
 
-    assert!(false); // to see the logs
+    // =====================================================================
+    // =                                                                   =
+    // =                          Add Support Token                        =
+    // =                                                                   =
+    // =====================================================================
+    let token_mint0 = Pubkey::new_unique();
+    let token_mint3 = Pubkey::new_unique();
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[
+            Instruction::new_with_bincode(
+                program_id,
+                &[2 as u8, 0],
+                vec![
+                    AccountMeta::new(payer_account, false),
+                    AccountMeta::new(auth_pda, false),
+                    AccountMeta::new(token_list_pda, false),
+                    AccountMeta::new(token_mint0, false),
+                ],
+            ),
+            Instruction::new_with_bincode(
+                program_id,
+                &[2 as u8, 3],
+                vec![
+                    AccountMeta::new(payer_account, false),
+                    AccountMeta::new(auth_pda, false),
+                    AccountMeta::new(token_list_pda, false),
+                    AccountMeta::new(token_mint3, false),
+                ],
+            ),
+        ],
+        Some(&payer_account),
+        &[&payer],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+
+    println!("\n================== Add Support Token ==================");
+    let token_list_info = get_account_info(&mut banks_client, token_list_pda).await;
+    println!("Token mint address 0: {}", token_mint0);
+    println!("Token mint address 3: {}", token_mint3);
+    let t1234 = array_ref![token_list_info.data(), 0, 128];
+    let (t1, t2, t3, t4) = array_refs![t1234, 32, 32, 32, 32];
+    println!(
+        "Support coin list : [\n\t{}, \n\t{}, \n\t{}, \n\t{}\n]",
+        Pubkey::from(*t1),
+        Pubkey::from(*t2),
+        Pubkey::from(*t3),
+        Pubkey::from(*t4)
+    );
+
+    // assert!(false); // to see the logs
 }

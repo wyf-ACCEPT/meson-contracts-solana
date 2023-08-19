@@ -12,10 +12,19 @@ pub enum MesonInstruction {
     InitContract,
 
     /// Account data:
-    /// 1. admin_account: the origin admin account, must be a signer
-    /// 2. authority_account: to save the address of admin
+    /// 1. admin_account: the admin account, must be a signer
+    /// 2. authority_account
     /// 3. new_admin: the new admin address
     TransferPremiumManager,
+
+    /// Account data:
+    /// 1. admin_account
+    /// 2. authority_account
+    /// 3. map_token_account
+    /// 4. token_mint_account: the mint address of the coin to add to support list
+    AddSupportToken {
+        coin_index: u8
+    }
 }
 
 impl MesonInstruction {
@@ -27,6 +36,8 @@ impl MesonInstruction {
             0 => MesonInstruction::InitContract,
 
             1 => MesonInstruction::TransferPremiumManager,
+
+            2 => MesonInstruction::AddSupportToken { coin_index: rest[0] },
 
             _ => return Err(MesonError::InvalidInstruction),
         })

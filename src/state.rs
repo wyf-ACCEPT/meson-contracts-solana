@@ -17,10 +17,10 @@ pub struct ConstantValue {}
 impl ConstantValue {
     const AUTHORITY_PHRASE: &[u8] = b"authority";
     const SUPPORT_COINS_PHRASE: &[u8] = b"supported_coins";
-    const POSTED_SWAP_PHRASE: &[u8] = b"posted_swaps";
-    const LOCKED_SWAP_PHRASE: &[u8] = b"locked_swaps";
-    const POOL_OWNERS_PHRASE: &[u8] = b"pool_owners";
-    const POOL_OF_AUTHORIZED_ADDR_PHRASE: &[u8] = b"pool_of_authorized_addr";
+    // const POSTED_SWAP_PHRASE: &[u8] = b"posted_swaps";
+    // const LOCKED_SWAP_PHRASE: &[u8] = b"locked_swaps";
+    // const POOL_OWNERS_PHRASE: &[u8] = b"pool_owners";
+    // const POOL_OF_AUTHORIZED_ADDR_PHRASE: &[u8] = b"pool_of_authorized_addr";
 }
 
 pub struct PostedSwap {
@@ -75,7 +75,7 @@ impl Pack for LockedSwap {
     }
 }
 
-pub fn create_related_account<'a, 'b>(
+fn create_related_account<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
     map_account: &'a AccountInfo<'b>,
@@ -89,11 +89,9 @@ pub fn create_related_account<'a, 'b>(
     if map_pda != *map_account.key {
         return Err(MesonError::PdaAccountMismatch.into());
     }
-
     if !map_account.is_writable {
         return Err(MesonError::PdaAccountNotWritable.into());
     }
-
     if !map_account.data_is_empty() {
         return Err(MesonError::PdaAccountAlreadyCreated.into());
     }
@@ -139,6 +137,23 @@ fn write_related_account<'a, 'b>(
     Ok(())
 }
 
+fn check_admin<'a, 'b>(
+    program_id: &Pubkey,
+    admin_account: &'a AccountInfo<'b>,
+    authority_account: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    let (authority_expected, _) =
+        Pubkey::find_program_address(&[ConstantValue::AUTHORITY_PHRASE], program_id);
+    if authority_expected != *authority_account.key {
+        return Err(MesonError::PdaAccountMismatch.into());
+    }
+    if !admin_account.is_signer || (*authority_account.data.borrow() != admin_account.key.as_ref())
+    {
+        return Err(MesonError::AdminNotSigner.into());
+    }
+    Ok(())
+}
+
 pub fn init_contract<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
@@ -163,7 +178,7 @@ pub fn init_contract<'a, 'b>(
         system_program,
         ConstantValue::SUPPORT_COINS_PHRASE,
         b"",
-        32 * 16, // We support at most 16 coins.
+        32 * 256, // We support at most 256 coins.
     )?;
     Ok(())
 }
@@ -174,32 +189,32 @@ pub fn transfer_admin<'a, 'b>(
     authority_account: &'a AccountInfo<'b>,
     new_admin: &'a AccountInfo<'b>,
 ) -> ProgramResult {
-    let (authority_expected, _) =
-        Pubkey::find_program_address(&[ConstantValue::AUTHORITY_PHRASE], program_id);
-
-    if authority_expected != *authority_account.key {
-        return Err(MesonError::PdaAccountMismatch.into());
-    }
     if !authority_account.is_writable {
         return Err(MesonError::PdaAccountNotWritable.into());
     }
-    if !admin_account.is_signer || (*authority_account.data.borrow() != admin_account.key.as_ref())
-    {
-        return Err(MesonError::AdminNotSigner.into());
-    }
+    check_admin(program_id, admin_account, authority_account)?;
     write_related_account(authority_account, new_admin.key.as_ref())?;
     Ok(())
 }
 
 // transferPremiumManager todo()
 
-pub fn addSupportToken<'a, 'b>(
+pub fn add_support_token<'a, 'b>(
     program_id: &Pubkey,
     admin_account: &'a AccountInfo<'b>,
     authority_account: &'a AccountInfo<'b>,
+    map_token_account: &'a AccountInfo<'b>,
     token_mint_account: &'a AccountInfo<'b>,
     coin_index: u8,
 ) -> ProgramResult {
+    check_admin(program_id, admin_account, authority_account)?;
+
+    let mut map_token_account_data = map_token_account.data.borrow_mut();
+    let start_u8_index = coin_index as usize * 32;
+
+    for i in 0..32 {
+        map_token_account_data[start_u8_index + i] = token_mint_account.key.as_ref()[i]
+    }
     Ok(())
 }
 
