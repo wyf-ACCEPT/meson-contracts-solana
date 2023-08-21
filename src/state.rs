@@ -19,8 +19,8 @@ impl ConstantValue {
     const SUPPORT_COINS_PHRASE: &[u8] = b"supported_coins";
     // const POSTED_SWAP_PHRASE: &[u8] = b"posted_swaps";
     // const LOCKED_SWAP_PHRASE: &[u8] = b"locked_swaps";
-    // const POOL_OWNERS_PHRASE: &[u8] = b"pool_owners";
-    // const POOL_OF_AUTHORIZED_ADDR_PHRASE: &[u8] = b"pool_of_authorized_addr";
+    const POOL_OWNERS_PHRASE: &[u8] = b"pool_owners";
+    const POOL_OF_AUTHORIZED_ADDR_PHRASE: &[u8] = b"pool_of_authorized_addr";
 }
 
 pub struct PostedSwap {
@@ -218,23 +218,135 @@ pub fn add_support_token<'a, 'b>(
     Ok(())
 }
 
-// public entry fun addSupportToken<CoinType>(
-//     sender: &signer,
-//     coin_index: u8,
-// ) acquires GeneralStore {
-//     let sender_addr = signer::address_of(sender);
-//     assert!(sender_addr == DEPLOYER, ENOT_DEPLOYER);
+pub fn token_mint_account_for_index<'a, 'b>(
+    map_token_account: &'a AccountInfo<'b>,
+    coin_index: u8,
+) -> Pubkey {
+    let map_token_account_data = map_token_account.data.borrow();
+    let start_u8_index = coin_index as usize * 32;
+    Pubkey::from(*array_ref![map_token_account_data, start_u8_index, 32])
+}
 
-//     let store = borrow_global_mut<GeneralStore>(DEPLOYER);
-//     let supported_coins = &mut store.supported_coins;
-//     if (table::contains(supported_coins, coin_index)) {
-//         table::remove(supported_coins, coin_index);
-//     };
-//     table::add(supported_coins, coin_index, type_info::type_of<CoinType>());
+pub fn match_token_address<'a, 'b>(
+    map_token_account: &'a AccountInfo<'b>,
+    token_mint_account: &'a AccountInfo<'b>,
+    coin_index: u8,
+) -> ProgramResult {
+    let token_addr_1 = *token_mint_account.key;
+    let token_addr_2 = token_mint_account_for_index(map_token_account, coin_index);
+    if token_addr_1 != token_addr_2 {
+        Err(MesonError::CoinTypeMismatch.into())
+    } else {
+        Ok(())
+    }
+}
 
-//     let coin_store = StoreForCoin<CoinType> {
-//         in_pool_coins: table::new<u64, Coin<CoinType>>(),
-//         pending_coins: table::new<vector<u8>, Coin<CoinType>>(),
-//     };
-//     move_to<StoreForCoin<CoinType>>(sender, coin_store);
-// }
+pub fn owner_of_pool<'a, 'b>(
+    program_id: &Pubkey,
+    owner_of_pool_account_input: &'a AccountInfo<'b>,
+    pool_index: u64,
+) -> Result<Pubkey, ProgramError> {
+    let (owner_of_pool_pubkey_expected, _) = Pubkey::find_program_address(
+        &[ConstantValue::POOL_OWNERS_PHRASE, &pool_index.to_le_bytes()],
+        program_id,
+    );
+    if *owner_of_pool_account_input.key != owner_of_pool_pubkey_expected {
+        Err(MesonError::PdaAccountMismatch.into())
+    } else {
+        let owner_pubkey_data = owner_of_pool_account_input.data.borrow();
+        Ok(Pubkey::from(*array_ref![owner_pubkey_data, 0, 32]))
+    }
+}
+
+pub fn assert_is_premium_manager<'a, 'b>(
+    program_id: &Pubkey,
+    owner_of_pool_account_input: &'a AccountInfo<'b>, // place to save premium manager's pool index
+    premium_manager_account: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    if *premium_manager_account.key != owner_of_pool(program_id, owner_of_pool_account_input, 0)? {
+        Err(MesonError::OnlyPremiumManager.into())
+    } else {
+        Ok(())
+    }
+}
+
+pub fn pool_index_of<'a, 'b>(
+    program_id: &Pubkey,
+    authorized_account_input: &'a AccountInfo<'b>, // the address itself
+    pool_of_authorized_account_input: &'a AccountInfo<'b>, // place to save address's pool index
+) -> Result<u64, ProgramError> {
+    let (pool_of_authorized_pubkey_expected, _) = Pubkey::find_program_address(
+        &[
+            ConstantValue::POOL_OF_AUTHORIZED_ADDR_PHRASE,
+            authorized_account_input.key.as_ref(),
+        ],
+        program_id,
+    );
+    if pool_of_authorized_pubkey_expected != *pool_of_authorized_account_input.key {
+        return Err(MesonError::PdaAccountMismatch.into());
+    }
+    let account_data = pool_of_authorized_account_input.data.borrow();
+    Ok(u64::from_le_bytes(*array_ref![account_data, 0, 8]))
+}
+
+pub fn pool_index_if_owner<'a, 'b>(
+    program_id: &Pubkey,
+    authorized_account_input: &'a AccountInfo<'b>,
+    pool_of_authorized_account_input: &'a AccountInfo<'b>,
+    owner_of_pool_account_input: &'a AccountInfo<'b>,
+) -> Result<u64, ProgramError> {
+    let pool_index = pool_index_of(
+        program_id,
+        authorized_account_input,
+        pool_of_authorized_account_input,
+    )?;
+    if *authorized_account_input.key
+        != owner_of_pool(program_id, owner_of_pool_account_input, pool_index)?
+    {
+        Err(MesonError::PoolNotPoolOwner.into())
+    } else {
+        Ok(pool_index)
+    }
+}
+
+pub fn register_pool_index<'a, 'b>(
+    program_id: &Pubkey,
+    payer_account: &'a AccountInfo<'b>,
+    system_program: &'a AccountInfo<'b>,
+    pool_index: u64,
+    authorized_account_input: &'a AccountInfo<'b>,
+    pool_of_authorized_account: &'a AccountInfo<'b>,
+    owner_of_pool_account_input: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    if pool_index == 0 {
+        return Err(MesonError::PoolIndexCannotBeZero.into());
+    }
+    let authorized_pubkey = *authorized_account_input.key;
+
+    // create `owner_of_pool_account` to save `pool_index(u64) -> owner_pubkey/authorized_pubkey(Pubkey)`
+    create_related_account(
+        program_id,
+        payer_account,
+        owner_of_pool_account_input,
+        system_program,
+        ConstantValue::POOL_OWNERS_PHRASE,
+        &pool_index.to_le_bytes(),
+        32,
+    )?;
+    write_related_account(owner_of_pool_account_input, authorized_pubkey.as_ref())?;
+
+    // create `pool_of_authorized_account` to save `owner_pubkey/authorized_pubkey(Pubkey) -> pool_index(u64)`
+    create_related_account(
+        program_id,
+        payer_account,
+        pool_of_authorized_account,
+        system_program,
+        ConstantValue::POOL_OF_AUTHORIZED_ADDR_PHRASE,
+        authorized_pubkey.as_ref(),
+        8,
+    )?;
+    write_related_account(pool_of_authorized_account, &pool_index.to_le_bytes())?;
+
+    Ok(())
+}
+

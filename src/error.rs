@@ -44,6 +44,18 @@ pub enum MesonError {
     #[error("Admin should sign this transaction!")]
     AdminNotSigner,
 
+    #[error("Coin type mismatch!")]
+    CoinTypeMismatch,
+
+    #[error("Only premium manager can call this function!")]
+    OnlyPremiumManager,
+
+    #[error("Only pool owner can call this function!")]
+    PoolNotPoolOwner,
+
+    #[error("Pool index cannot be zero!")]
+    PoolIndexCannotBeZero,
+
 }
 
 impl From<MesonError> for ProgramError {
