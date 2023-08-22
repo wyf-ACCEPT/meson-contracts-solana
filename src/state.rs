@@ -315,7 +315,7 @@ pub fn register_pool_index<'a, 'b>(
     system_program: &'a AccountInfo<'b>,
     pool_index: u64,
     authorized_account_input: &'a AccountInfo<'b>,
-    pool_of_authorized_account: &'a AccountInfo<'b>,
+    pool_of_authorized_account_input: &'a AccountInfo<'b>,
     owner_of_pool_account_input: &'a AccountInfo<'b>,
 ) -> ProgramResult {
     if pool_index == 0 {
@@ -339,14 +339,42 @@ pub fn register_pool_index<'a, 'b>(
     create_related_account(
         program_id,
         payer_account,
-        pool_of_authorized_account,
+        pool_of_authorized_account_input,
         system_program,
         ConstantValue::POOL_OF_AUTHORIZED_ADDR_PHRASE,
         authorized_pubkey.as_ref(),
         8,
     )?;
-    write_related_account(pool_of_authorized_account, &pool_index.to_le_bytes())?;
+    write_related_account(pool_of_authorized_account_input, &pool_index.to_le_bytes())?;
 
     Ok(())
 }
 
+pub fn add_authorized<'a, 'b>(
+    program_id: &Pubkey,
+    payer_account: &'a AccountInfo<'b>,
+    system_program: &'a AccountInfo<'b>,
+    pool_index: u64,
+    authorized_account_input: &'a AccountInfo<'b>,
+    pool_of_authorized_account_input: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    if pool_index == 0 {
+        return Err(MesonError::PoolIndexCannotBeZero.into());
+    }
+    create_related_account(
+        program_id,
+        payer_account,
+        pool_of_authorized_account_input,
+        system_program,
+        ConstantValue::POOL_OF_AUTHORIZED_ADDR_PHRASE,
+        authorized_account_input.key.as_ref(),
+        8,
+    )?;
+    write_related_account(pool_of_authorized_account_input, &pool_index.to_le_bytes())?;
+
+    Ok(())
+}
+
+// remove_authorized todo()
+
+// transfer_pool_owner todo()
