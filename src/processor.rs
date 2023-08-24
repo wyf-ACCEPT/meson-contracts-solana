@@ -7,7 +7,7 @@ use solana_program::{
 // use crate::state::{create_related_account, write_related_account};
 use crate::{
     instruction::MesonInstruction,
-    state::{init_contract, transfer_admin, add_support_token},
+    state::{add_support_token, init_contract, register_pool_index, transfer_admin},
 };
 
 pub struct Processor {}
@@ -22,6 +22,9 @@ impl Processor {
             MesonInstruction::AddSupportToken { coin_index } => {
                 Self::process_add_support_token(program_id, accounts, coin_index)
             }
+            MesonInstruction::RigisterPool { pool_index } => {
+                Self::process_register_pool(program_id, accounts, pool_index)
+            }
         }
     }
 
@@ -29,16 +32,20 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
 
         let payer_account = next_account_info(account_info_iter)?;
+        let system_program = next_account_info(account_info_iter)?;
         let authority_account = next_account_info(account_info_iter)?;
         let map_token_account = next_account_info(account_info_iter)?;
-        let system_program = next_account_info(account_info_iter)?;
+        let save_poaa_account_input_admin = next_account_info(account_info_iter)?;
+        let save_oop_account_input_admin = next_account_info(account_info_iter)?;
 
         init_contract(
             program_id,
             payer_account,
+            system_program,
             map_token_account,
             authority_account,
-            system_program,
+            save_poaa_account_input_admin,
+            save_oop_account_input_admin,
         )
     }
 
@@ -52,14 +59,49 @@ impl Processor {
         transfer_admin(program_id, admin_account, authority_account, new_admin)
     }
 
-    fn process_add_support_token(program_id: &Pubkey, accounts: &[AccountInfo], coin_index: u8) -> ProgramResult {
+    fn process_add_support_token(
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+        coin_index: u8,
+    ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
 
         let admin_account = next_account_info(account_info_iter)?;
         let authority_account = next_account_info(account_info_iter)?;
         let map_token_account = next_account_info(account_info_iter)?;
         let token_mint_account = next_account_info(account_info_iter)?;
-        
-        add_support_token(program_id, admin_account, authority_account, map_token_account, token_mint_account, coin_index)
+
+        add_support_token(
+            program_id,
+            admin_account,
+            authority_account,
+            map_token_account,
+            token_mint_account,
+            coin_index,
+        )
+    }
+
+    fn process_register_pool(
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+        pool_index: u64,
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        let payer_account = next_account_info(account_info_iter)?;
+        let system_program = next_account_info(account_info_iter)?;
+        let authorized_account = next_account_info(account_info_iter)?;
+        let save_poaa_account_input = next_account_info(account_info_iter)?;
+        let save_oop_account_input = next_account_info(account_info_iter)?;
+
+        register_pool_index(
+            program_id,
+            payer_account,
+            system_program,
+            pool_index,
+            authorized_account,
+            save_poaa_account_input,
+            save_oop_account_input,
+        )
     }
 }
