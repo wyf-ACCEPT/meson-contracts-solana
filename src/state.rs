@@ -19,8 +19,8 @@ impl ConstantValue {
     const SUPPORT_COINS_PHRASE: &[u8] = b"supported_coins";
     // const POSTED_SWAP_PHRASE: &[u8] = b"posted_swaps";
     // const LOCKED_SWAP_PHRASE: &[u8] = b"locked_swaps";
-    const POOL_OWNERS_PHRASE: &[u8] = b"pool_owners";
-    const POOL_OF_AUTHORIZED_ADDR_PHRASE: &[u8] = b"pool_of_authorized_addr";
+    const SAVE_OWNER_OF_POOLS_PHRASE: &[u8] = b"pool_owners";
+    const SAVE_POOL_OF_AUTHORIZED_ADDR_PHRASE: &[u8] = b"pool_of_authorized_addr";
 }
 
 pub struct PostedSwap {
@@ -168,7 +168,7 @@ pub fn init_contract<'a, 'b>(
         system_program,
         ConstantValue::AUTHORITY_PHRASE,
         b"",
-        32, // To save the admin address
+        32, // To save the admin address (also the premium)
     )?;
     write_related_account(authority_account, payer_account.key.as_ref())?;
     create_related_account(
@@ -241,29 +241,30 @@ pub fn match_token_address<'a, 'b>(
     }
 }
 
+// `oop` stands for `owner of pool`, and `poaa` means `pool of authorized address`
 pub fn owner_of_pool<'a, 'b>(
     program_id: &Pubkey,
-    owner_of_pool_account_input: &'a AccountInfo<'b>,
+    save_oop_account_input: &'a AccountInfo<'b>, // place to save the authorized address of a specified pool index
     pool_index: u64,
 ) -> Result<Pubkey, ProgramError> {
-    let (owner_of_pool_pubkey_expected, _) = Pubkey::find_program_address(
-        &[ConstantValue::POOL_OWNERS_PHRASE, &pool_index.to_le_bytes()],
+    let (save_oop_pubkey_expected, _) = Pubkey::find_program_address(
+        &[ConstantValue::SAVE_OWNER_OF_POOLS_PHRASE, &pool_index.to_le_bytes()],
         program_id,
     );
-    if *owner_of_pool_account_input.key != owner_of_pool_pubkey_expected {
+    if *save_oop_account_input.key != save_oop_pubkey_expected {
         Err(MesonError::PdaAccountMismatch.into())
     } else {
-        let owner_pubkey_data = owner_of_pool_account_input.data.borrow();
+        let owner_pubkey_data = save_oop_account_input.data.borrow();
         Ok(Pubkey::from(*array_ref![owner_pubkey_data, 0, 32]))
     }
 }
 
 pub fn assert_is_premium_manager<'a, 'b>(
     program_id: &Pubkey,
-    owner_of_pool_account_input: &'a AccountInfo<'b>, // place to save premium manager's pool index
+    save_oop_account_input: &'a AccountInfo<'b>, // place to save premium manager's pool index
     premium_manager_account: &'a AccountInfo<'b>,
 ) -> ProgramResult {
-    if *premium_manager_account.key != owner_of_pool(program_id, owner_of_pool_account_input, 0)? {
+    if *premium_manager_account.key != owner_of_pool(program_id, save_oop_account_input, 0)? {
         Err(MesonError::OnlyPremiumManager.into())
     } else {
         Ok(())
@@ -273,35 +274,35 @@ pub fn assert_is_premium_manager<'a, 'b>(
 pub fn pool_index_of<'a, 'b>(
     program_id: &Pubkey,
     authorized_account_input: &'a AccountInfo<'b>, // the address itself
-    pool_of_authorized_account_input: &'a AccountInfo<'b>, // place to save address's pool index
+    save_poaa_account_input: &'a AccountInfo<'b>, // place to save address's pool index
 ) -> Result<u64, ProgramError> {
-    let (pool_of_authorized_pubkey_expected, _) = Pubkey::find_program_address(
+    let (save_poaa_pubkey_expected, _) = Pubkey::find_program_address(
         &[
-            ConstantValue::POOL_OF_AUTHORIZED_ADDR_PHRASE,
+            ConstantValue::SAVE_POOL_OF_AUTHORIZED_ADDR_PHRASE,
             authorized_account_input.key.as_ref(),
         ],
         program_id,
     );
-    if pool_of_authorized_pubkey_expected != *pool_of_authorized_account_input.key {
+    if save_poaa_pubkey_expected != *save_poaa_account_input.key {
         return Err(MesonError::PdaAccountMismatch.into());
     }
-    let account_data = pool_of_authorized_account_input.data.borrow();
+    let account_data = save_poaa_account_input.data.borrow();
     Ok(u64::from_le_bytes(*array_ref![account_data, 0, 8]))
 }
 
 pub fn pool_index_if_owner<'a, 'b>(
     program_id: &Pubkey,
     authorized_account_input: &'a AccountInfo<'b>,
-    pool_of_authorized_account_input: &'a AccountInfo<'b>,
-    owner_of_pool_account_input: &'a AccountInfo<'b>,
+    save_poaa_account_input: &'a AccountInfo<'b>,
+    save_oop_account_input: &'a AccountInfo<'b>,
 ) -> Result<u64, ProgramError> {
     let pool_index = pool_index_of(
         program_id,
         authorized_account_input,
-        pool_of_authorized_account_input,
+        save_poaa_account_input,
     )?;
     if *authorized_account_input.key
-        != owner_of_pool(program_id, owner_of_pool_account_input, pool_index)?
+        != owner_of_pool(program_id, save_oop_account_input, pool_index)?
     {
         Err(MesonError::PoolNotPoolOwner.into())
     } else {
@@ -315,37 +316,38 @@ pub fn register_pool_index<'a, 'b>(
     system_program: &'a AccountInfo<'b>,
     pool_index: u64,
     authorized_account_input: &'a AccountInfo<'b>,
-    pool_of_authorized_account_input: &'a AccountInfo<'b>,
-    owner_of_pool_account_input: &'a AccountInfo<'b>,
+    save_poaa_account_input: &'a AccountInfo<'b>,
+    save_oop_account_input: &'a AccountInfo<'b>,
 ) -> ProgramResult {
+    // Check PDA address
     if pool_index == 0 {
         return Err(MesonError::PoolIndexCannotBeZero.into());
     }
     let authorized_pubkey = *authorized_account_input.key;
 
-    // create `owner_of_pool_account` to save `pool_index(u64) -> owner_pubkey/authorized_pubkey(Pubkey)`
+    // create `save_oop_account` to save `pool_index(u64) -> owner_pubkey/authorized_pubkey(Pubkey)`
     create_related_account(
         program_id,
         payer_account,
-        owner_of_pool_account_input,
+        save_oop_account_input,
         system_program,
-        ConstantValue::POOL_OWNERS_PHRASE,
+        ConstantValue::SAVE_OWNER_OF_POOLS_PHRASE,
         &pool_index.to_le_bytes(),
         32,
     )?;
-    write_related_account(owner_of_pool_account_input, authorized_pubkey.as_ref())?;
+    write_related_account(save_oop_account_input, authorized_pubkey.as_ref())?;
 
-    // create `pool_of_authorized_account` to save `owner_pubkey/authorized_pubkey(Pubkey) -> pool_index(u64)`
+    // create `save_poaa_account` to save `owner_pubkey/authorized_pubkey(Pubkey) -> pool_index(u64)`
     create_related_account(
         program_id,
         payer_account,
-        pool_of_authorized_account_input,
+        save_poaa_account_input,
         system_program,
-        ConstantValue::POOL_OF_AUTHORIZED_ADDR_PHRASE,
+        ConstantValue::SAVE_POOL_OF_AUTHORIZED_ADDR_PHRASE,
         authorized_pubkey.as_ref(),
         8,
     )?;
-    write_related_account(pool_of_authorized_account_input, &pool_index.to_le_bytes())?;
+    write_related_account(save_poaa_account_input, &pool_index.to_le_bytes())?;
 
     Ok(())
 }
@@ -356,7 +358,7 @@ pub fn add_authorized<'a, 'b>(
     system_program: &'a AccountInfo<'b>,
     pool_index: u64,
     authorized_account_input: &'a AccountInfo<'b>,
-    pool_of_authorized_account_input: &'a AccountInfo<'b>,
+    save_poaa_account_input: &'a AccountInfo<'b>,
 ) -> ProgramResult {
     if pool_index == 0 {
         return Err(MesonError::PoolIndexCannotBeZero.into());
@@ -364,13 +366,13 @@ pub fn add_authorized<'a, 'b>(
     create_related_account(
         program_id,
         payer_account,
-        pool_of_authorized_account_input,
+        save_poaa_account_input,
         system_program,
-        ConstantValue::POOL_OF_AUTHORIZED_ADDR_PHRASE,
+        ConstantValue::SAVE_POOL_OF_AUTHORIZED_ADDR_PHRASE,
         authorized_account_input.key.as_ref(),
         8,
     )?;
-    write_related_account(pool_of_authorized_account_input, &pool_index.to_le_bytes())?;
+    write_related_account(save_poaa_account_input, &pool_index.to_le_bytes())?;
 
     Ok(())
 }
