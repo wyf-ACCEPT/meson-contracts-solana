@@ -69,6 +69,14 @@ pub enum MesonError {
     #[error("Pool index cannot be zero!")]
     PoolIndexCannotBeZero,
 
+    // 16
+    #[error("Swap not exists!")]
+    SwapNotExists,
+
+    // 17
+    #[error("Swap bonded to others!")]
+    SwapBondedToOthers
+
 }
 
 impl From<MesonError> for ProgramError {

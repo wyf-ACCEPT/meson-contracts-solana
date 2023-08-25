@@ -29,14 +29,6 @@ async fn update_blockhash(banks_client: &mut BanksClient, recent_blockhash: Hash
         .unwrap()
 }
 
-// async fn show_account_info(banks_client: &mut BanksClient, account: Pubkey) {
-//     let program_id_data = get_account_info(banks_client, account).await;
-//     println!(
-//         "[AccountInfo {}]\nProgram data: {:?}\n",
-//         account, program_id_data
-//     );
-// }
-
 #[tokio::test]
 async fn test_all() {
     let program_id = Pubkey::from_str("Meson11111111111111111111111111111111111111").unwrap();

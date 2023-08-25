@@ -4,7 +4,6 @@ use solana_program::{
     entrypoint::ProgramResult,
     program::invoke_signed,
     program_error::ProgramError,
-    program_pack::{Pack, Sealed},
     pubkey::Pubkey,
     system_instruction,
     sysvar::{rent::Rent, Sysvar},
@@ -17,8 +16,8 @@ pub struct ConstantValue {}
 impl ConstantValue {
     pub const AUTHORITY_PHRASE: &[u8] = b"authority";
     pub const SUPPORT_COINS_PHRASE: &[u8] = b"supported_coins";
-    // pub const POSTED_SWAP_PHRASE: &[u8] = b"posted_swaps";
-    // pub const LOCKED_SWAP_PHRASE: &[u8] = b"locked_swaps";
+    pub const SAVE_POSTED_SWAP_PHRASE: &[u8] = b"posted_swaps";
+    pub const SAVE_LOCKED_SWAP_PHRASE: &[u8] = b"locked_swaps";
     pub const SAVE_OWNER_OF_POOLS_PHRASE: &[u8] = b"pool_owners";
     pub const SAVE_POOL_OF_AUTHORIZED_ADDR_PHRASE: &[u8] = b"pool_of_authorized_addr";
 }
@@ -35,43 +34,79 @@ pub struct LockedSwap {
     recipient: Pubkey,
 }
 
-impl Sealed for PostedSwap {}
+// impl Sealed for PostedSwap {}
 
-impl Sealed for LockedSwap {}
+// impl Sealed for LockedSwap {}
 
-impl Pack for PostedSwap {
-    const LEN: usize = 60;
+// impl Pack for PostedSwap {
+//     const LEN: usize = 60;
 
-    fn pack_into_slice(&self, dst: &mut [u8]) {
+//     fn pack_into_slice(&self, dst: &mut [u8]) {
+//         dst[0..8].copy_from_slice(&self.pool_index.to_be_bytes());
+//         dst[8..28].copy_from_slice(&self.initiator);
+//         dst[28..60].copy_from_slice(self.from_address.as_ref());
+//     }
+
+//     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
+//         Ok(Self {
+//             pool_index: u64::from_be_bytes(*array_ref![src, 0, 8]),
+//             initiator: *array_ref![src, 8, 20],
+//             from_address: Pubkey::new_from_array(*array_ref![src, 28, 32]),
+//         })
+//     }
+// }
+
+impl PostedSwap {
+    fn pack(&self) -> [u8; 60] {
+        let mut dst = [0; 60];
         dst[0..8].copy_from_slice(&self.pool_index.to_be_bytes());
         dst[8..28].copy_from_slice(&self.initiator);
         dst[28..60].copy_from_slice(self.from_address.as_ref());
+        dst
     }
 
-    fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
-        Ok(Self {
+    fn unpack(src: [u8; 60]) -> Self {
+        Self {
             pool_index: u64::from_be_bytes(*array_ref![src, 0, 8]),
             initiator: *array_ref![src, 8, 20],
             from_address: Pubkey::new_from_array(*array_ref![src, 28, 32]),
-        })
+        }
     }
 }
 
-impl Pack for LockedSwap {
-    const LEN: usize = 48;
+// impl Pack for LockedSwap {
+//     const LEN: usize = 48;
 
-    fn pack_into_slice(&self, dst: &mut [u8]) {
+//     fn pack_into_slice(&self, dst: &mut [u8]) {
+//         dst[0..8].copy_from_slice(&self.pool_index.to_be_bytes());
+//         dst[8..16].copy_from_slice(&self.until.to_be_bytes());
+//         dst[16..48].copy_from_slice(self.recipient.as_ref());
+//     }
+
+//     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
+//         Ok(Self {
+//             pool_index: u64::from_be_bytes(*array_ref![src, 0, 8]),
+//             until: u64::from_be_bytes(*array_ref![src, 8, 8]),
+//             recipient: Pubkey::new_from_array(*array_ref![src, 16, 32]),
+//         })
+//     }
+// }
+
+impl LockedSwap {
+    fn pack(&self) -> [u8; 48] {
+        let mut dst = [0; 48];
         dst[0..8].copy_from_slice(&self.pool_index.to_be_bytes());
         dst[8..16].copy_from_slice(&self.until.to_be_bytes());
         dst[16..48].copy_from_slice(self.recipient.as_ref());
+        dst
     }
 
-    fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
-        Ok(Self {
+    fn unpack(src: [u8; 48]) -> Self {
+        Self {
             pool_index: u64::from_be_bytes(*array_ref![src, 0, 8]),
             until: u64::from_be_bytes(*array_ref![src, 8, 8]),
             recipient: Pubkey::new_from_array(*array_ref![src, 16, 32]),
-        })
+        }
     }
 }
 
@@ -125,15 +160,8 @@ fn write_related_account<'a, 'b>(
     content: &[u8],
 ) -> ProgramResult {
     // // Don't need to check beacuse only this program can rewrite the value
-    // let (map_pda, _) = Pubkey::find_program_address(&[phrase_prefix, phrase], program_id);
-    // assert!(
-    //     !(map_pda != *map_account.key || !map_account.is_writable),
-    //     "Map PDA error!"
-    // );
-
     let mut account_data = map_account.data.borrow_mut();
     account_data.copy_from_slice(content);
-
     Ok(())
 }
 
@@ -165,6 +193,11 @@ fn check_pda_match<'a, 'b>(
     }
 }
 
+/// save_poaa_account_input: `poaa` -> `pool of authorized address`
+/// save_oop_account_input : `oop` -> `owner of pool`
+/// save_ps_account_input  : `ps` -> `posted swap`
+/// save_si_account_input  : `si` -> `swap id`
+
 fn check_poaa_directly<'a, 'b>(
     program_id: &Pubkey,
     authorized_account_input: &'a AccountInfo<'b>,
@@ -181,8 +214,8 @@ fn check_poaa_directly<'a, 'b>(
 }
 
 fn check_oop_directly<'a, 'b>(
-    pool_index: u64,
     program_id: &Pubkey,
+    pool_index: u64,
     save_oop_account_input: &'a AccountInfo<'b>,
 ) -> ProgramResult {
     let (save_oop_pubkey_expected, _) = Pubkey::find_program_address(
@@ -193,6 +226,30 @@ fn check_oop_directly<'a, 'b>(
         program_id,
     );
     check_pda_match(save_oop_account_input, save_oop_pubkey_expected)
+}
+
+fn check_postedswap_directly<'a, 'b>(
+    program_id: &Pubkey,
+    encoded_swap: [u8; 32],
+    save_ps_account_input: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    let (save_ps_pubkey_expected, _) = Pubkey::find_program_address(
+        &[ConstantValue::SAVE_POSTED_SWAP_PHRASE, &encoded_swap],
+        program_id,
+    );
+    check_pda_match(save_ps_account_input, save_ps_pubkey_expected)
+}
+
+fn check_lockedswap_directly<'a, 'b>(
+    program_id: &Pubkey,
+    swap_id: [u8; 32],
+    save_si_account_input: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    let (save_si_pubkey_expected, _) = Pubkey::find_program_address(
+        &[ConstantValue::SAVE_LOCKED_SWAP_PHRASE, &swap_id],
+        program_id,
+    );
+    check_pda_match(save_si_account_input, save_si_pubkey_expected)
 }
 
 pub fn init_contract<'a, 'b>(
@@ -223,7 +280,7 @@ pub fn init_contract<'a, 'b>(
         b"",
         32 * 256, // We support at most 256 coins.
     )?;
-    check_oop_directly(0, program_id, save_oop_account_input_admin)?;
+    check_oop_directly(program_id, 0, save_oop_account_input_admin)?;
     check_poaa_directly(program_id, payer_account, save_poaa_account_input_admin)?;
     register_pool_index(
         program_id,
@@ -293,13 +350,12 @@ pub fn match_token_address<'a, 'b>(
     }
 }
 
-// `oop` stands for `owner of pool`, and `poaa` means `pool of authorized address`
 pub fn owner_of_pool<'a, 'b>(
     program_id: &Pubkey,
     pool_index: u64,
     save_oop_account_input: &'a AccountInfo<'b>, // place to save the authorized address of a specified pool index
 ) -> Result<Pubkey, ProgramError> {
-    check_oop_directly(pool_index, program_id, save_oop_account_input)?;
+    check_oop_directly(program_id, pool_index, save_oop_account_input)?;
 
     let owner_pubkey_data = save_oop_account_input.data.borrow();
     Ok(Pubkey::from(*array_ref![owner_pubkey_data, 0, 32]))
@@ -365,7 +421,7 @@ pub fn register_pool_index<'a, 'b>(
 
     // Check PDA address
     let authorized_pubkey = *authorized_account_input.key;
-    check_oop_directly(pool_index, program_id, save_oop_account_input)?;
+    check_oop_directly(program_id, pool_index, save_oop_account_input)?;
     check_poaa_directly(
         program_id,
         authorized_account_input,
@@ -433,3 +489,88 @@ pub fn add_authorized<'a, 'b>(
 // remove_authorized todo()
 
 // transfer_pool_owner todo()
+
+pub fn add_posted_swap<'a, 'b>(
+    program_id: &Pubkey,
+    payer_account: &'a AccountInfo<'b>,
+    system_program: &'a AccountInfo<'b>,
+    encoded_swap: [u8; 32],
+    pool_index: u64,
+    initiator: [u8; 20],
+    from_address: Pubkey,
+    save_ps_account_input: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    check_postedswap_directly(program_id, encoded_swap, save_ps_account_input)?; // needed?
+    create_related_account(
+        program_id,
+        payer_account,
+        save_ps_account_input,
+        system_program,
+        ConstantValue::SAVE_POSTED_SWAP_PHRASE,
+        &encoded_swap,
+        60,
+    )?;
+    write_related_account(
+        save_ps_account_input,
+        &(PostedSwap {
+            pool_index,
+            initiator,
+            from_address,
+        })
+        .pack(),
+    )?;
+    Ok(())
+}
+
+pub fn bond_posted_swap<'a, 'b>(
+    program_id: &Pubkey,
+    encoded_swap: [u8; 32],
+    pool_index: u64,
+    save_ps_account_input: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    check_postedswap_directly(program_id, encoded_swap, save_ps_account_input)?;
+    let temp_data = save_ps_account_input.data.borrow();
+    let mut posted = PostedSwap::unpack(*array_ref![temp_data, 0, 60]);
+    if posted.from_address == Pubkey::from([0; 32]) {
+        Err(MesonError::SwapNotExists.into())
+    } else if posted.pool_index != 0 {
+        Err(MesonError::SwapBondedToOthers.into())
+    } else {
+        posted.pool_index = pool_index;
+        write_related_account(save_ps_account_input, &posted.pack())
+    }
+}
+
+// remove_posted_swap todo()
+
+pub fn add_locked_swap<'a, 'b>(
+    program_id: &Pubkey,
+    payer_account: &'a AccountInfo<'b>,
+    system_program: &'a AccountInfo<'b>,
+    swap_id: [u8; 32],
+    pool_index: u64,
+    until: u64,
+    recipient: Pubkey,
+    save_si_account_input: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    check_lockedswap_directly(program_id, swap_id, save_si_account_input)?;
+    create_related_account(
+        program_id,
+        payer_account,
+        save_si_account_input,
+        system_program,
+        ConstantValue::SAVE_LOCKED_SWAP_PHRASE,
+        &swap_id,
+        48,
+    )?;
+    write_related_account(
+        save_si_account_input,
+        &(LockedSwap {
+            pool_index,
+            until,
+            recipient,
+        })
+        .pack(),
+    )?;
+    Ok(())
+}
