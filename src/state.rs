@@ -35,7 +35,7 @@ pub struct LockedSwap {
 }
 
 impl PostedSwap {
-    fn pack(&self) -> [u8; 60] {
+    pub fn pack(&self) -> [u8; 60] {
         let mut dst = [0; 60];
         dst[0..8].copy_from_slice(&self.pool_index.to_be_bytes());
         dst[8..28].copy_from_slice(&self.initiator);
@@ -43,7 +43,7 @@ impl PostedSwap {
         dst
     }
 
-    fn unpack(src: [u8; 60]) -> Self {
+    pub fn unpack(src: [u8; 60]) -> Self {
         Self {
             pool_index: u64::from_be_bytes(*array_ref![src, 0, 8]),
             initiator: *array_ref![src, 8, 20],
@@ -53,7 +53,7 @@ impl PostedSwap {
 }
 
 impl LockedSwap {
-    fn pack(&self) -> [u8; 48] {
+    pub fn pack(&self) -> [u8; 48] {
         let mut dst = [0; 48];
         dst[0..8].copy_from_slice(&self.pool_index.to_be_bytes());
         dst[8..16].copy_from_slice(&self.until.to_be_bytes());
@@ -61,7 +61,7 @@ impl LockedSwap {
         dst
     }
 
-    fn unpack(src: [u8; 48]) -> Self {
+    pub fn unpack(src: [u8; 48]) -> Self {
         Self {
             pool_index: u64::from_be_bytes(*array_ref![src, 0, 8]),
             until: u64::from_be_bytes(*array_ref![src, 8, 8]),
@@ -94,16 +94,14 @@ fn create_related_account<'a, 'b>(
     let rent = Rent::get()?; // Important!!
     let rent_lamports = rent.minimum_balance(data_length);
 
-    let create_map_ix = &system_instruction::create_account(
-        payer_account.key,
-        map_account.key,
-        rent_lamports,
-        data_length as u64,
-        program_id,
-    );
-
     invoke_signed(
-        create_map_ix,
+        &system_instruction::create_account(
+            payer_account.key,
+            map_account.key,
+            rent_lamports,
+            data_length as u64,
+            program_id,
+        ),
         &[
             payer_account.clone(),
             map_account.clone(),
@@ -216,7 +214,7 @@ pub fn init_contract<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
     system_program: &'a AccountInfo<'b>,
-    map_token_account: &'a AccountInfo<'b>,
+    save_map_token_account: &'a AccountInfo<'b>,
     authority_account: &'a AccountInfo<'b>,
     save_poaa_account_input_admin: &'a AccountInfo<'b>,
     save_oop_account_input_admin: &'a AccountInfo<'b>,
@@ -234,7 +232,7 @@ pub fn init_contract<'a, 'b>(
     create_related_account(
         program_id,
         payer_account,
-        map_token_account,
+        save_map_token_account,
         system_program,
         ConstantValue::SUPPORT_COINS_PHRASE,
         b"",
@@ -274,35 +272,36 @@ pub fn add_support_token<'a, 'b>(
     program_id: &Pubkey,
     admin_account: &'a AccountInfo<'b>,
     authority_account: &'a AccountInfo<'b>,
-    map_token_account: &'a AccountInfo<'b>,
+    save_map_token_account: &'a AccountInfo<'b>,
     token_mint_account: &'a AccountInfo<'b>,
     coin_index: u8,
 ) -> ProgramResult {
     check_admin(program_id, admin_account, authority_account)?;
-    let mut map_token_account_data = map_token_account.data.borrow_mut();
+    let mut save_map_token_account_data = save_map_token_account.data.borrow_mut();
     let start_u8_index = coin_index as usize * 32;
     for i in 0..32 {
-        map_token_account_data[start_u8_index + i] = token_mint_account.key.as_ref()[i]
+        save_map_token_account_data[start_u8_index + i] = token_mint_account.key.as_ref()[i]
     }
     Ok(())
 }
 
 pub fn token_mint_account_for_index<'a, 'b>(
-    map_token_account: &'a AccountInfo<'b>,
+    save_map_token_account: &'a AccountInfo<'b>,
     coin_index: u8,
 ) -> Pubkey {
-    let map_token_account_data = map_token_account.data.borrow();
+    let save_map_token_account_data = save_map_token_account.data.borrow();
     let start_u8_index = coin_index as usize * 32;
-    Pubkey::from(*array_ref![map_token_account_data, start_u8_index, 32])
+    Pubkey::from(*array_ref![save_map_token_account_data, start_u8_index, 32])
 }
 
+// Original `match_coin_type`
 pub fn match_token_address<'a, 'b>(
-    map_token_account: &'a AccountInfo<'b>,
+    save_map_token_account: &'a AccountInfo<'b>,
     token_mint_account: &'a AccountInfo<'b>,
     coin_index: u8,
 ) -> ProgramResult {
     let token_addr_1 = *token_mint_account.key;
-    let token_addr_2 = token_mint_account_for_index(map_token_account, coin_index);
+    let token_addr_2 = token_mint_account_for_index(save_map_token_account, coin_index);
     if token_addr_1 != token_addr_2 {
         Err(MesonError::CoinTypeMismatch.into())
     } else {

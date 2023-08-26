@@ -7,14 +7,20 @@ use {
     solana_program::{
         hash::Hash,
         instruction::{AccountMeta, Instruction},
+        program_pack::Pack,
         pubkey::Pubkey,
         system_program,
+        sysvar::{rent::Rent, Sysvar},
     },
     solana_program_test::*,
     solana_sdk::{
         account::{Account, ReadableAccount},
         signature::{Keypair, Signer},
         transaction::Transaction,
+    },
+    spl_token::{
+        self,
+        state::{Account as TokenAccount, Mint},
     },
 };
 
@@ -39,8 +45,8 @@ async fn test_all() {
     )
     .start()
     .await;
-    let payer_account = payer.pubkey();
-    // let payer_account = Pubkey::new_unique();
+    let payer_pubkey = payer.pubkey();
+    // let payer_pubkey = Pubkey::new_unique();
 
     // =====================================================================
     // =                                                                   =
@@ -52,7 +58,7 @@ async fn test_all() {
     let (save_poaa_pubkey_admin, _) = Pubkey::find_program_address(
         &[
             ConstantValue::SAVE_POOL_OF_AUTHORIZED_ADDR_PHRASE,
-            payer_account.as_ref(),
+            payer_pubkey.as_ref(),
         ],
         &program_id,
     );
@@ -68,7 +74,7 @@ async fn test_all() {
             program_id,
             &[0 as u8],
             vec![
-                AccountMeta::new(payer_account, false),
+                AccountMeta::new(payer_pubkey, false),
                 AccountMeta::new(system_program::id(), false),
                 AccountMeta::new(auth_pda, false),
                 AccountMeta::new(token_list_pda, false),
@@ -84,7 +90,7 @@ async fn test_all() {
 
     println!("\n================== Init Contract ==================");
     println!("Program   pubkey: {}", program_id);
-    println!("Payer     pubkey: {}", payer_account);
+    println!("Payer     pubkey: {}", payer_pubkey);
     let authority_info = get_account_info(&mut banks_client, auth_pda).await;
     println!(
         "Current   admin : {}",
@@ -96,7 +102,7 @@ async fn test_all() {
         Pubkey::from(*array_ref![premium_info.data(), 0, 32])
     );
 
-    // show_account_info(&mut banks_client, payer_account).await;
+    // show_account_info(&mut banks_client, payer_pubkey).await;
     // show_account_info(&mut banks_client, auth_pda).await;
     // show_account_info(&mut banks_client, token_list_pda).await;
     // show_account_info(&mut banks_client, program_id).await;
@@ -116,14 +122,14 @@ async fn test_all() {
                 program_id,
                 &[1 as u8],
                 vec![
-                    AccountMeta::new(payer_account, false),
+                    AccountMeta::new(payer_pubkey, false),
                     AccountMeta::new(auth_pda, false),
                     AccountMeta::new(new_admin.pubkey(), false),
                 ],
             ),
-            system_instruction::transfer(&payer_account, &new_admin.pubkey(), 1500000000),
-            system_instruction::transfer(&payer_account, &alice.pubkey(), 7500000000),
-            system_instruction::transfer(&payer_account, &bob.pubkey(), 2500000000),
+            system_instruction::transfer(&payer_pubkey, &new_admin.pubkey(), 1500000000),
+            system_instruction::transfer(&payer_pubkey, &alice.pubkey(), 7500000000),
+            system_instruction::transfer(&payer_pubkey, &bob.pubkey(), 2500000000),
         ],
         Some(&payer.pubkey()),
         &[&payer],
@@ -148,7 +154,7 @@ async fn test_all() {
             vec![
                 AccountMeta::new(new_admin.pubkey(), false),
                 AccountMeta::new(auth_pda, false),
-                AccountMeta::new(payer_account, false),
+                AccountMeta::new(payer_pubkey, false),
             ],
         )],
         Some(&new_admin.pubkey()),
@@ -160,7 +166,7 @@ async fn test_all() {
     println!(
         "Admin trans-back: {} (balance: {})",
         Pubkey::from(*array_ref![authority_info.data(), 0, 32]),
-        banks_client.get_balance(payer_account).await.unwrap()
+        banks_client.get_balance(payer_pubkey).await.unwrap()
     );
 
     // =====================================================================
@@ -177,7 +183,7 @@ async fn test_all() {
                 program_id,
                 &[2 as u8, 0],
                 vec![
-                    AccountMeta::new(payer_account, false),
+                    AccountMeta::new(payer_pubkey, false),
                     AccountMeta::new(auth_pda, false),
                     AccountMeta::new(token_list_pda, false),
                     AccountMeta::new(token_mint0, false),
@@ -187,14 +193,14 @@ async fn test_all() {
                 program_id,
                 &[2 as u8, 3],
                 vec![
-                    AccountMeta::new(payer_account, false),
+                    AccountMeta::new(payer_pubkey, false),
                     AccountMeta::new(auth_pda, false),
                     AccountMeta::new(token_list_pda, false),
                     AccountMeta::new(token_mint3, false),
                 ],
             ),
         ],
-        Some(&payer_account),
+        Some(&payer_pubkey),
         &[&payer],
         recent_blockhash,
     );
@@ -268,4 +274,84 @@ async fn test_all() {
         alice.pubkey(),
         u64::from_be_bytes(*array_ref![aa_info.data(), 0, 8])
     );
+
+    // =====================================================================
+    // =                                                                   =
+    // =                         Create a token                            =
+    // =                                                                   =
+    // =====================================================================
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    let rent = Rent::default();
+
+    let ta_program = Keypair::new(); // Token account for the program
+    let ta_payer = Keypair::new();
+    let ta_alice = Keypair::new();
+    let ta_bob = Keypair::new();
+    let (token_transfer_pubkey, _) =
+        Pubkey::find_program_address(&[b"token_transfer"], &program_id);
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[
+            system_instruction::create_account(
+                &payer.pubkey(),
+                &mint_pubkey,
+                rent.minimum_balance(Mint::LEN),
+                Mint::LEN as u64,
+                &spl_token::id(),
+            ),
+            spl_token::instruction::initialize_mint(
+                &spl_token::id(),
+                &mint_pubkey,
+                &payer.pubkey(),
+                None,
+                6,
+            )
+            .unwrap(),
+        ],
+        Some(&payer.pubkey()),
+        &[&payer, &mint_keypair],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+
+    // (ta_program.pubkey(), token_transfer_pubkey),
+    // (ta_payer.pubkey(), payer_pubkey),
+    // (ta_alice.pubkey(), alice.pubkey()),
+    // (ta_bob.pubkey(), bob.pubkey()),
+
+    let f1_temp = |token_account_pubkey: Pubkey| {
+        system_instruction::create_account(
+            &payer.pubkey(),
+            &token_account_pubkey,
+            rent.minimum_balance(TokenAccount::LEN),
+            TokenAccount::LEN as u64,
+            &spl_token::id(),
+        )
+    };
+
+    let f2_temp = |token_account_pubkey: Pubkey, owner: Pubkey| {
+        spl_token::instruction::initialize_account(
+            &spl_token::id(),
+            &token_account_pubkey,
+            &mint_pubkey,
+            &owner,
+        )
+        .unwrap()
+    };
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[
+            f1_temp(ta_program.pubkey()),
+            f2_temp(ta_program.pubkey(), token_transfer_pubkey),
+            f1_temp(ta_payer.pubkey()),
+            f2_temp(ta_payer.pubkey(), payer_pubkey),
+        ],
+        Some(&payer.pubkey()),
+        &[&payer, &ta_program],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
 }
