@@ -34,28 +34,6 @@ pub struct LockedSwap {
     recipient: Pubkey,
 }
 
-// impl Sealed for PostedSwap {}
-
-// impl Sealed for LockedSwap {}
-
-// impl Pack for PostedSwap {
-//     const LEN: usize = 60;
-
-//     fn pack_into_slice(&self, dst: &mut [u8]) {
-//         dst[0..8].copy_from_slice(&self.pool_index.to_be_bytes());
-//         dst[8..28].copy_from_slice(&self.initiator);
-//         dst[28..60].copy_from_slice(self.from_address.as_ref());
-//     }
-
-//     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
-//         Ok(Self {
-//             pool_index: u64::from_be_bytes(*array_ref![src, 0, 8]),
-//             initiator: *array_ref![src, 8, 20],
-//             from_address: Pubkey::new_from_array(*array_ref![src, 28, 32]),
-//         })
-//     }
-// }
-
 impl PostedSwap {
     fn pack(&self) -> [u8; 60] {
         let mut dst = [0; 60];
@@ -73,24 +51,6 @@ impl PostedSwap {
         }
     }
 }
-
-// impl Pack for LockedSwap {
-//     const LEN: usize = 48;
-
-//     fn pack_into_slice(&self, dst: &mut [u8]) {
-//         dst[0..8].copy_from_slice(&self.pool_index.to_be_bytes());
-//         dst[8..16].copy_from_slice(&self.until.to_be_bytes());
-//         dst[16..48].copy_from_slice(self.recipient.as_ref());
-//     }
-
-//     fn unpack_from_slice(src: &[u8]) -> Result<Self, ProgramError> {
-//         Ok(Self {
-//             pool_index: u64::from_be_bytes(*array_ref![src, 0, 8]),
-//             until: u64::from_be_bytes(*array_ref![src, 8, 8]),
-//             recipient: Pubkey::new_from_array(*array_ref![src, 16, 32]),
-//         })
-//     }
-// }
 
 impl LockedSwap {
     fn pack(&self) -> [u8; 48] {
@@ -574,3 +534,5 @@ pub fn add_locked_swap<'a, 'b>(
     )?;
     Ok(())
 }
+
+// remove_locked_swap todo()
