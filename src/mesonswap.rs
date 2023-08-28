@@ -1,4 +1,3 @@
-use arrayref::array_ref;
 use solana_program::{
     account_info::AccountInfo,
     clock::Clock,
@@ -10,6 +9,7 @@ use solana_program::{
     system_instruction,
     sysvar::{rent::Rent, Sysvar},
 };
+// use spl_token::instruction::transfer_checked;
 
 use crate::{error::MesonError, state, utils::Utils};
 
@@ -40,11 +40,12 @@ pub fn post_swap<'a, 'b>(
     //     assert!(delta > MesonHelpers::get_MIN_BOND_TIME_PERIOD(), ESWAP_EXPIRE_TOO_EARLY);
     //     assert!(delta < MesonHelpers::get_MAX_BOND_TIME_PERIOD(), ESWAP_EXPIRE_TOO_LATE);
     let clock = Clock::get()?;
-    let now_timestamp = clock.unix_timestamp.to_be() as u64;
-    msg!("{}", now_timestamp);
+    let now_timestamp = clock.unix_timestamp.to_le() as u64;
+    msg!("Timestamp now: {}", now_timestamp);
+    msg!("Amount       : {}", amount);
     // todo!();
 
-    Utils::check_request_signature(encoded_swap, signature, initiator)?;
+    // Utils::check_request_signature(encoded_swap, signature, initiator)?;
     state::add_posted_swap(
         program_id,
         payer_account,
@@ -55,6 +56,8 @@ pub fn post_swap<'a, 'b>(
         *payer_account.key,
         save_ps_account_input,
     )?;
+
+    // transfer_checked(token_program_id, source_pubkey, mint_pubkey, destination_pubkey, authority_pubkey, signer_pubkeys, amount, decimals);
 
     Ok(())
 }

@@ -70,6 +70,8 @@ impl LockedSwap {
     }
 }
 
+/* ------------------------ Basic utils functions ------------------------ */
+
 fn create_related_account<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
@@ -151,6 +153,8 @@ fn check_pda_match<'a, 'b>(
     }
 }
 
+/* ------------------------ Check PDA account related functions ------------------------ */
+
 /// save_poaa_account_input: `poaa` -> `pool of authorized address`
 /// save_oop_account_input : `oop` -> `owner of pool`
 /// save_ps_account_input  : `ps` -> `posted swap`
@@ -209,6 +213,8 @@ fn check_lockedswap_directly<'a, 'b>(
     );
     check_pda_match(save_si_account_input, save_si_pubkey_expected)
 }
+
+/* ------------------------ Admin functions ------------------------ */
 
 pub fn init_contract<'a, 'b>(
     program_id: &Pubkey,
@@ -284,6 +290,8 @@ pub fn add_support_token<'a, 'b>(
     }
     Ok(())
 }
+
+/* ------------------------ LP pools functions ------------------------ */
 
 pub fn token_mint_account_for_index<'a, 'b>(
     save_map_token_account: &'a AccountInfo<'b>,
@@ -449,6 +457,8 @@ pub fn add_authorized<'a, 'b>(
 
 // transfer_pool_owner todo()
 
+/* ------------------------ Deal with posted-swap/locked-swap tables ------------------------ */
+
 pub fn add_posted_swap<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
@@ -535,3 +545,6 @@ pub fn add_locked_swap<'a, 'b>(
 }
 
 // remove_locked_swap todo()
+
+/* ------------------------ Deal with tokens/liquidity ------------------------ */
+

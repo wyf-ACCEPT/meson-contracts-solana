@@ -171,10 +171,12 @@ async fn test_all() {
 
     // =====================================================================
     // =                                                                   =
-    // =                          Add Support Token                        =
+    // =                        Add Supported Token                        =
     // =                                                                   =
     // =====================================================================
-    let token_mint0 = Pubkey::new_unique();
+    let mint_keypair = Keypair::new();
+    let mint_pubkey = mint_keypair.pubkey();
+    // let token_mint0 = Pubkey::new_unique();
     let token_mint3 = Pubkey::new_unique();
     let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
     let transaction = Transaction::new_signed_with_payer(
@@ -186,7 +188,7 @@ async fn test_all() {
                     AccountMeta::new(payer_pubkey, false),
                     AccountMeta::new(auth_pda, false),
                     AccountMeta::new(token_list_pda, false),
-                    AccountMeta::new(token_mint0, false),
+                    AccountMeta::new(mint_pubkey, false),
                 ],
             ),
             Instruction::new_with_bincode(
@@ -208,7 +210,7 @@ async fn test_all() {
 
     println!("\n================== Add Support Token ==================");
     let token_list_info = get_account_info(&mut banks_client, token_list_pda).await;
-    println!("Token mint address 0: {}", token_mint0);
+    println!("Token mint address 0: {}", mint_pubkey);
     println!("Token mint address 3: {}", token_mint3);
     let t1234 = array_ref![token_list_info.data(), 0, 128];
     let (t1, t2, t3, t4) = array_refs![t1234, 32, 32, 32, 32];
@@ -280,8 +282,6 @@ async fn test_all() {
     // =                         Create a token                            =
     // =                                                                   =
     // =====================================================================
-    let mint_keypair = Keypair::new();
-    let mint_pubkey = mint_keypair.pubkey();
     let rent = Rent::default();
 
     let ta_program = Keypair::new(); // Token account for the program
@@ -346,12 +346,77 @@ async fn test_all() {
         &[
             f1_temp(ta_program.pubkey()),
             f2_temp(ta_program.pubkey(), token_transfer_pubkey),
-            f1_temp(ta_payer.pubkey()),
-            f2_temp(ta_payer.pubkey(), payer_pubkey),
+            f1_temp(ta_alice.pubkey()),
+            f2_temp(ta_alice.pubkey(), alice.pubkey()),
+            f1_temp(ta_bob.pubkey()),
+            f2_temp(ta_bob.pubkey(), bob.pubkey()),
         ],
         Some(&payer.pubkey()),
-        &[&payer, &ta_program],
+        &[&payer, &ta_program, &ta_alice, &ta_bob],
         recent_blockhash,
     );
     banks_client.process_transaction(transaction).await.unwrap();
+
+    println!("\n================== Register token account ==================");
+    println!("Token account for program: {}", ta_program.pubkey());
+    println!("Token account for alice  : {}", ta_alice.pubkey());
+    println!("Token account for bob    : {}", ta_bob.pubkey());
+
+
+    // =====================================================================
+    // =                                                                   =
+    // =                       S.1 Post-swap by Alice                      =
+    // =                                                                   =
+    // =====================================================================
+    let encoded_swap: [u8; 32] = [
+        0x01, 0x00, 0x1d, 0xcd, 0x65, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81,
+        0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x01, 0xf5, 0x00, 0x01,
+        0xf5, 0x00,
+    ];
+    let signature: [u8; 64] = [
+        0xb3, 0x18, 0x4c, 0x25, 0x7c, 0xf9, 0x73, 0x06, 0x92, 0x50, 0xee, 0xfd, 0x84, 0x9a, 0x74,
+        0xd2, 0x72, 0x50, 0xf8, 0x34, 0x3c, 0xbd, 0xa7, 0x61, 0x51, 0x91, 0x14, 0x9d, 0xd3, 0xc1,
+        0xb6, 0x1d, 0x5d, 0x4e, 0x2b, 0x5e, 0xcc, 0x76, 0xa5, 0x9b, 0xaa, 0xbf, 0x10, 0xa8, 0xd5,
+        0xd1, 0x16, 0xed, 0xb9, 0x5a, 0x5b, 0x20, 0x55, 0xb9, 0xb1, 0x9f, 0x71, 0x52, 0x40, 0x96,
+        0x97, 0x5b, 0x29, 0xc2,
+    ];
+    let initiator: [u8; 20] = [
+        0x2e, 0xf8, 0xa5, 0x1f, 0x8f, 0xf1, 0x29, 0xdb, 0xb8, 0x74, 0xa0, 0xef, 0xb0, 0x21, 0x70,
+        0x2f, 0x59, 0xc1, 0xb2, 0x11,
+    ];
+    let pool_index: u64 = 0;
+    let (save_ps_pubkey, _) = Pubkey::find_program_address(
+        &[
+            ConstantValue::SAVE_POSTED_SWAP_PHRASE,
+            &encoded_swap,
+        ],
+        &program_id,
+    );
+
+    let mut data_input_array = [4 as u8; 125];
+    data_input_array[1..33].copy_from_slice(&encoded_swap);
+    data_input_array[33..97].copy_from_slice(&signature);
+    data_input_array[97..117].copy_from_slice(&initiator);
+    data_input_array[117..125].copy_from_slice(&pool_index.to_be_bytes());
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[Instruction::new_with_bytes(
+            program_id,
+            &data_input_array,
+            vec![
+                AccountMeta::new(payer_pubkey, false),
+                AccountMeta::new(system_program::id(), false),
+                AccountMeta::new(mint_pubkey, false),
+                AccountMeta::new(token_list_pda, false),
+                AccountMeta::new(save_ps_pubkey, false),
+            ],
+        )],
+        Some(&payer.pubkey()),
+        &[&payer],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+
+
 }

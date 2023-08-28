@@ -7,6 +7,7 @@ use solana_program::{
 // use crate::state::{create_related_account, write_related_account};
 use crate::{
     instruction::MesonInstruction,
+    mesonswap::post_swap,
     state::{add_support_token, init_contract, register_pool_index, transfer_admin},
 };
 
@@ -22,9 +23,22 @@ impl Processor {
             MesonInstruction::AddSupportToken { coin_index } => {
                 Self::process_add_support_token(program_id, accounts, coin_index)
             }
-            MesonInstruction::RigisterPool { pool_index } => {
+            MesonInstruction::RegisterPool { pool_index } => {
                 Self::process_register_pool(program_id, accounts, pool_index)
             }
+            MesonInstruction::PostSwap {
+                encoded_swap,
+                signature,
+                initiator,
+                pool_index,
+            } => Self::process_post_swap(
+                program_id,
+                accounts,
+                encoded_swap,
+                signature,
+                initiator,
+                pool_index,
+            ),
         }
     }
 
@@ -102,6 +116,36 @@ impl Processor {
             authorized_account,
             save_poaa_account_input,
             save_oop_account_input,
+        )
+    }
+
+    fn process_post_swap(
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+        encoded_swap: [u8; 32],
+        signature: [u8; 64],
+        initiator: [u8; 20],
+        pool_index: u64,
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        let payer_account = next_account_info(account_info_iter)?;
+        let system_program = next_account_info(account_info_iter)?;
+        let token_mint_account = next_account_info(account_info_iter)?;
+        let save_map_token_account = next_account_info(account_info_iter)?;
+        let save_ps_account_input = next_account_info(account_info_iter)?;
+
+        post_swap(
+            program_id,
+            payer_account,
+            system_program,
+            token_mint_account,
+            save_map_token_account,
+            save_ps_account_input,
+            encoded_swap,
+            signature,
+            initiator,
+            pool_index,
         )
     }
 }

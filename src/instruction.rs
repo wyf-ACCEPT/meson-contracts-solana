@@ -1,4 +1,4 @@
-use arrayref::array_ref;
+use arrayref::{array_ref, array_refs};
 
 use crate::error::MesonError;
 
@@ -31,7 +31,20 @@ pub enum MesonInstruction {
     /// 3. authorized_account: the address to add to LP pools
     /// 4. save_poaa_account_input: the data account to save `authorized address -> pool index` pair (8-bytes long)
     /// 5. save_oop_account_input: the data account to save `pool index -> authorized address` pair (32-bytes long)
-    RigisterPool { pool_index: u64 },
+    RegisterPool { pool_index: u64 },
+
+    /// Account data:
+    /// 1. payer_account
+    /// 2. system_program
+    /// 3. token_mint_account
+    /// 4. save_map_token_account: same as `map_token_account`
+    /// 5. save_ps_account_input: the data account to save `encoded -> postedSwap` pair (60-bytes)
+    PostSwap {
+        encoded_swap: [u8; 32],
+        signature: [u8; 64],
+        initiator: [u8; 20],
+        pool_index: u64,
+    },
 }
 
 impl MesonInstruction {
@@ -47,9 +60,21 @@ impl MesonInstruction {
                 coin_index: rest[0],
             },
 
-            3 => MesonInstruction::RigisterPool {
+            3 => MesonInstruction::RegisterPool {
                 pool_index: u64::from_be_bytes(*array_ref![rest, 0, 8]),
             },
+
+            4 => {
+                let rest_fix = *array_ref![rest, 0, 124];
+                let (encoded_swap_ref, signature_ref, initiator_ref, pool_index_ref) =
+                    array_refs![&rest_fix, 32, 64, 20, 8];
+                MesonInstruction::PostSwap {
+                    encoded_swap: *encoded_swap_ref,
+                    signature: *signature_ref,
+                    initiator: *initiator_ref,
+                    pool_index: u64::from_be_bytes(*pool_index_ref),
+                }
+            }
 
             _ => return Err(MesonError::InvalidInstruction),
         })
