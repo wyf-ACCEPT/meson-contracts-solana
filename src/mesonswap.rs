@@ -9,17 +9,21 @@ use solana_program::{
     system_instruction,
     sysvar::{rent::Rent, Sysvar},
 };
-// use spl_token::instruction::transfer_checked;
+use spl_token::processor::Processor;
 
 use crate::{error::MesonError, state, utils::Utils};
 
 pub fn post_swap<'a, 'b>(
     program_id: &Pubkey,
+    token_program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
     system_program: &'a AccountInfo<'b>,
+    user_account: &'a AccountInfo<'b>,
     token_mint_account: &'a AccountInfo<'b>,
     save_map_token_account: &'a AccountInfo<'b>,
     save_ps_account_input: &'a AccountInfo<'b>,
+    ta_user_input: &'a AccountInfo<'b>,
+    ta_program_input: &'a AccountInfo<'b>,
     encoded_swap: [u8; 32],
     signature: [u8; 64],
     initiator: [u8; 20],
@@ -46,6 +50,7 @@ pub fn post_swap<'a, 'b>(
     // todo!();
 
     // Utils::check_request_signature(encoded_swap, signature, initiator)?;
+    msg!("Signature    : {:?}", signature);
     state::add_posted_swap(
         program_id,
         payer_account,
@@ -53,11 +58,16 @@ pub fn post_swap<'a, 'b>(
         encoded_swap,
         pool_index,
         initiator,
-        *payer_account.key,
+        *user_account.key,
         save_ps_account_input,
     )?;
 
-    // transfer_checked(token_program_id, source_pubkey, mint_pubkey, destination_pubkey, authority_pubkey, signer_pubkeys, amount, decimals);
+    // Processor::process_transfer(
+    //     token_program_id,
+    //     &[*ta_user_input, *ta_program_input, *user_account],
+    //     amount,
+    //     None,
+    // )?;
 
     Ok(())
 }

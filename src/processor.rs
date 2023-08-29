@@ -13,6 +13,8 @@ use crate::{
 
 pub struct Processor {}
 impl Processor {
+    const TOKEN_PROGRAM_ID: [u8; 32] = [6, 221, 246, 225, 215, 101, 161, 147, 217, 203, 225, 70, 206, 235, 121, 172, 28, 180, 133, 237, 95, 91, 55, 145, 58, 140, 245, 133, 126, 255, 0, 169];
+
     pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], input: &[u8]) -> ProgramResult {
         let instruction = MesonInstruction::unpack(input)?;
         match instruction {
@@ -131,17 +133,24 @@ impl Processor {
 
         let payer_account = next_account_info(account_info_iter)?;
         let system_program = next_account_info(account_info_iter)?;
+        let user_account = next_account_info(account_info_iter)?;
         let token_mint_account = next_account_info(account_info_iter)?;
         let save_map_token_account = next_account_info(account_info_iter)?;
         let save_ps_account_input = next_account_info(account_info_iter)?;
+        let ta_user_input = next_account_info(account_info_iter)?;
+        let ta_program_input = next_account_info(account_info_iter)?;
 
         post_swap(
             program_id,
+            &Pubkey::from(Self::TOKEN_PROGRAM_ID),
             payer_account,
             system_program,
+            user_account,
             token_mint_account,
             save_map_token_account,
             save_ps_account_input,
+            ta_user_input,
+            ta_program_input,
             encoded_swap,
             signature,
             initiator,

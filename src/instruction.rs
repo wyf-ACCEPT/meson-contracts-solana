@@ -36,9 +36,12 @@ pub enum MesonInstruction {
     /// Account data:
     /// 1. payer_account
     /// 2. system_program
-    /// 3. token_mint_account
-    /// 4. save_map_token_account: same as `map_token_account`
-    /// 5. save_ps_account_input: the data account to save `encoded -> postedSwap` pair (60-bytes)
+    /// 3. user_account: the user who wants to swap
+    /// 4. token_mint_account
+    /// 5. save_map_token_account: same as `map_token_account`
+    /// 6. save_ps_account_input: the data account to save `encoded -> postedSwap` pair (60-bytes)
+    /// 7. ta_user_input: the token account for the user
+    /// 8. ta_program_input: the token account for the program
     PostSwap {
         encoded_swap: [u8; 32],
         signature: [u8; 64],

@@ -4,7 +4,7 @@ version = "3.0.1"
 authors = ["Github @wyf-ACCEPT"]
 repository = "https://github.com/solana-labs/solana-program-library"
 license = "Apache-2.0"
-edition = "2021"        ## Very important magic!!
+edition = "2021"                                                     ## Very important magic!!
 
 [features]
 no-entrypoint = []
@@ -14,7 +14,7 @@ test-sbf = []
 arrayref = "0.3.7"
 thiserror = "1.0"
 solana-program = "1.14.12"
-spl-token = "4.0.0"
+spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
 # hex-string = "0.1.0"
 
 [dev-dependencies]
