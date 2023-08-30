@@ -33,12 +33,12 @@ pub enum MesonInstruction {
     /// 4. save_oop_account_input: the data account to save `pool index -> authorized address` pair (32-bytes long)
     RegisterPool { pool_index: u64 },
 
-    /// Account data:
+    /// Account data for post_swap():
     /// 0. payer_account
     /// 1. system_program
     /// 2. user_account: the user who wants to swap
     /// 3. token_mint_account
-    /// 4. token_program_info: that is `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`
+    /// 4. token_program_info: that is "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
     /// 5. save_map_token_account: same as `map_token_account`
     /// 6. save_ps_account_input: the data account to save `encoded -> postedSwap` pair (60-bytes)
     /// 7. ta_user_input: the token account for the user
@@ -48,6 +48,15 @@ pub enum MesonInstruction {
         encoded_swap: [u8; 32],
         signature: [u8; 64],
         initiator: [u8; 20],
+        pool_index: u64,
+    },
+
+    /// Account data for bond_swap():
+    /// 0. sender_account: same as `authorized_account`
+    /// 1. save_poaa_account_input
+    /// 2. save_ps_account_input
+    BondSwap {
+        encoded_swap: [u8; 32],
         pool_index: u64,
     },
 }
@@ -77,6 +86,15 @@ impl MesonInstruction {
                     encoded_swap: *encoded_swap_ref,
                     signature: *signature_ref,
                     initiator: *initiator_ref,
+                    pool_index: u64::from_be_bytes(*pool_index_ref),
+                }
+            }
+
+            5 => {
+                let rest_fix = *array_ref![rest, 0, 40];
+                let (encoded_swap_ref, pool_index_ref) = array_refs![&rest_fix, 32, 8];
+                MesonInstruction::BondSwap {
+                    encoded_swap: *encoded_swap_ref,
                     pool_index: u64::from_be_bytes(*pool_index_ref),
                 }
             }

@@ -455,6 +455,7 @@ async fn test_all() {
     // =                       S.1 Post-swap by Alice                      =
     // =                                                                   =
     // =====================================================================
+    println!("\n================== S.1 Post Swap ==================");
     let mut encoded_swap: [u8; 32] = [
         0x01, 0x00, 0x00, 0xe4, 0xe1, 0xc0, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81,
         0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x01, 0xf5, 0x00, 0x01,
@@ -492,7 +493,6 @@ async fn test_all() {
             program_id,
             &data_input_array,
             vec![
-                // contract_signer_account_input,
                 AccountMeta::new(payer_pubkey, true),
                 AccountMeta::new(system_program::id(), false),
                 AccountMeta::new(bob.pubkey(), true),
@@ -511,7 +511,6 @@ async fn test_all() {
     );
     banks_client.process_transaction(transaction).await.unwrap();
 
-    println!("\n================== S.1 Post Swap ==================");
     println!("Data account for post-swap: {}", save_ps_pubkey);
     let ps_info = get_account_info(&mut banks_client, save_ps_pubkey).await;
     let (pool_index, initiator, from_address) =

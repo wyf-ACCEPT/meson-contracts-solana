@@ -84,6 +84,10 @@ pub enum MesonError {
     // 19
     #[error("Swap expires too late!")]
     SwapExpireTooLate,
+
+    // 20
+    #[error("Pool index mismatch!")]
+    PoolIndexMismatch
 }
 
 impl From<MesonError> for ProgramError {
