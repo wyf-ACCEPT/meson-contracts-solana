@@ -10,7 +10,7 @@ use {
         program_pack::Pack,
         pubkey::Pubkey,
         system_program,
-        sysvar::{rent::Rent, Sysvar},
+        sysvar::rent::Rent,
     },
     solana_program_test::*,
     solana_sdk::{
@@ -53,6 +53,7 @@ async fn test_all() {
     // =                            Init Contract                          =
     // =                                                                   =
     // =====================================================================
+    println!("\n================== Init Contract ==================");
     let (auth_pda, _) = Pubkey::find_program_address(&[b"authority"], &program_id);
     let (token_list_pda, _) = Pubkey::find_program_address(&[b"supported_coins"], &program_id);
     let (save_poaa_pubkey_admin, _) = Pubkey::find_program_address(
@@ -88,7 +89,6 @@ async fn test_all() {
     );
     banks_client.process_transaction(transaction).await.unwrap();
 
-    println!("\n================== Init Contract ==================");
     println!("Program   pubkey: {}", program_id);
     println!("Payer     pubkey: {}", payer_pubkey);
     let authority_info = get_account_info(&mut banks_client, auth_pda).await;
@@ -112,6 +112,7 @@ async fn test_all() {
     // =                            Transfer Admin                         =
     // =                                                                   =
     // =====================================================================
+    println!("\n================== Transfer Admin ==================");
     let new_admin = Keypair::new(); // Temporary admin
     let alice = Keypair::new(); // LP
     let bob = Keypair::new(); // User
@@ -137,7 +138,6 @@ async fn test_all() {
     );
     banks_client.process_transaction(transaction).await.unwrap();
 
-    println!("\n================== Transfer Admin ==================");
     let authority_info = get_account_info(&mut banks_client, auth_pda).await;
     println!("New       pubkey: {}", new_admin.pubkey());
     println!(
@@ -174,6 +174,7 @@ async fn test_all() {
     // =                        Add Supported Token                        =
     // =                                                                   =
     // =====================================================================
+    println!("\n================== Add Support Token ==================");
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     // let token_mint0 = Pubkey::new_unique();
@@ -208,7 +209,6 @@ async fn test_all() {
     );
     banks_client.process_transaction(transaction).await.unwrap();
 
-    println!("\n================== Add Support Token ==================");
     let token_list_info = get_account_info(&mut banks_client, token_list_pda).await;
     println!("Token mint address 0: {}", mint_pubkey);
     println!("Token mint address 3: {}", token_mint3);
@@ -227,6 +227,7 @@ async fn test_all() {
     // =                       LP Register new pool                        =
     // =                                                                   =
     // =====================================================================
+    println!("\n================== Register new pool ==================");
     let alice_pool_index: u64 = 5;
     let (save_poaa_pubkey_alice, _) = Pubkey::find_program_address(
         &[
@@ -263,7 +264,6 @@ async fn test_all() {
     );
     banks_client.process_transaction(transaction).await.unwrap();
 
-    println!("\n================== Register new pool ==================");
     let pool_info = get_account_info(&mut banks_client, save_oop_pubkey_alice).await;
     println!(
         "Owner of pool {}    : {}",
@@ -282,14 +282,14 @@ async fn test_all() {
     // =                         Create a token                            =
     // =                                                                   =
     // =====================================================================
+    println!("\n================== Create a token ==================");
     let rent = Rent::default();
 
     let ta_program = Keypair::new(); // Token account for the program
-    let ta_payer = Keypair::new();
     let ta_alice = Keypair::new();
     let ta_bob = Keypair::new();
-    let (token_transfer_pubkey, _) =
-        Pubkey::find_program_address(&[b"token_transfer"], &program_id);
+    let (contract_signer_pubkey, _) =
+        Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], &program_id);
 
     // Setup the mint (so the payer is the admin of the token)
     let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
@@ -316,12 +316,14 @@ async fn test_all() {
         recent_blockhash,
     );
     banks_client.process_transaction(transaction).await.unwrap();
+    println!("Token mint (Token address): {}", mint_pubkey);
 
-    // (ta_program.pubkey(), token_transfer_pubkey),
+    // (ta_program.pubkey(), contract_signer_pubkey),
     // (ta_payer.pubkey(), payer_pubkey),
     // (ta_alice.pubkey(), alice.pubkey()),
     // (ta_bob.pubkey(), bob.pubkey()),
 
+    println!("\n================== Register token account ==================");
     let f1_temp = |token_account_pubkey: Pubkey| {
         system_instruction::create_account(
             &payer.pubkey(),
@@ -347,7 +349,7 @@ async fn test_all() {
     let transaction = Transaction::new_signed_with_payer(
         &[
             f1_temp(ta_program.pubkey()),
-            f2_temp(ta_program.pubkey(), token_transfer_pubkey),
+            f2_temp(ta_program.pubkey(), contract_signer_pubkey),
             f1_temp(ta_alice.pubkey()),
             f2_temp(ta_alice.pubkey(), alice.pubkey()),
             f1_temp(ta_bob.pubkey()),
@@ -359,12 +361,11 @@ async fn test_all() {
     );
     banks_client.process_transaction(transaction).await.unwrap();
 
-    println!("\n================== Register token account ==================");
     println!("Token account for [Program]: {}", ta_program.pubkey());
-    println!("Token account for [Alice]  : {}", ta_alice.pubkey());
-    println!("Token account for [Bob]    : {}", ta_bob.pubkey());
+    println!("Token account for [ Alice ]: {}", ta_alice.pubkey());
+    println!("Token account for [  Bob  ]: {}", ta_bob.pubkey());
 
-    // Mint some tokens for everyone
+    println!("\n================== Mint some tokens ==================");
     let mint_amount = 500_000_000;
     let f3_temp = |token_account_pubkey: Pubkey| {
         spl_token::instruction::mint_to(
@@ -390,24 +391,65 @@ async fn test_all() {
     );
     banks_client.process_transaction(transaction).await.unwrap();
 
-    println!("\n================== Mint some tokens ==================");
     let ta_program_info = get_account_info(&mut banks_client, ta_program.pubkey()).await;
     let ta_alice_info = get_account_info(&mut banks_client, ta_alice.pubkey()).await;
     let ta_bob_info = get_account_info(&mut banks_client, ta_bob.pubkey()).await;
     println!(
-        "USDC Balance of [Program]: {:?}",
+        "USDC Balance of [Program] ({}): {:?}",
+        program_id,
         TokenAccount::unpack(ta_program_info.data()).unwrap().amount
     );
     println!(
-        "USDC Balance of [Alice]  : {:?}",
+        "USDC Balance of [ Alice ] ({}): {:?}",
+        alice.pubkey(),
         TokenAccount::unpack(ta_alice_info.data()).unwrap().amount
     );
     println!(
-        "USDC Balance of [Bob]    : {:?}",
+        "USDC Balance of [  Bob  ] ({}): {:?}",
+        bob.pubkey(),
         TokenAccount::unpack(ta_bob_info.data()).unwrap().amount
     );
 
-    println!("{:?}", Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap().as_ref());
+    println!("\n================== Approve ==================");
+    let approve_amount = 400_000_000;
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[
+            spl_token::instruction::approve(
+                &spl_token::id(),
+                &ta_alice.pubkey(),
+                &program_id,
+                &alice.pubkey(),
+                &[],
+                approve_amount,
+            )
+            .unwrap(),
+            spl_token::instruction::approve(
+                &spl_token::id(),
+                &ta_bob.pubkey(),
+                &program_id,
+                &bob.pubkey(),
+                &[],
+                approve_amount,
+            )
+            .unwrap(),
+        ],
+        Some(&payer.pubkey()),
+        &[&payer, &alice, &bob],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+
+    let ta_alice_info = get_account_info(&mut banks_client, ta_alice.pubkey()).await;
+    println!(
+        "Token account info [Alice]  : {:?}",
+        TokenAccount::unpack(ta_alice_info.data()).unwrap()
+    );
+    let ta_bob_info = get_account_info(&mut banks_client, ta_bob.pubkey()).await;
+    println!(
+        "Token account info [ Bob ]  : {:?}",
+        TokenAccount::unpack(ta_bob_info.data()).unwrap()
+    );
 
     // =====================================================================
     // =                                                                   =
@@ -447,15 +489,21 @@ async fn test_all() {
             program_id,
             &data_input_array,
             vec![
-                AccountMeta::new(payer_pubkey, false),
+                // contract_signer_account_input,
+                AccountMeta::new(payer_pubkey, true),
                 AccountMeta::new(system_program::id(), false),
+                AccountMeta::new(bob.pubkey(), true),
                 AccountMeta::new(mint_pubkey, false),
+                AccountMeta::new(spl_token::id(), false),
                 AccountMeta::new(token_list_pda, false),
                 AccountMeta::new(save_ps_pubkey, false),
+                AccountMeta::new(ta_bob.pubkey(), false),
+                AccountMeta::new(ta_program.pubkey(), false),
+                AccountMeta::new(contract_signer_pubkey, false),
             ],
         )],
         Some(&payer.pubkey()),
-        &[&payer],
+        &[&payer, &bob],
         recent_blockhash,
     );
     banks_client.process_transaction(transaction).await.unwrap();
@@ -471,4 +519,18 @@ async fn test_all() {
         initiator,
         Pubkey::from(*from_address)
     );
+   
+    let ta_program_info = get_account_info(&mut banks_client, ta_program.pubkey()).await;
+    let ta_bob_info = get_account_info(&mut banks_client, ta_bob.pubkey()).await; 
+    println!(
+        "After post-swap: USDC Balance of [Program] ({}): {:?}",
+        program_id,
+        TokenAccount::unpack(ta_program_info.data()).unwrap().amount
+    );
+    println!(
+        "After post-swap: USDC Balance of [  Bob  ] ({}): {:?}",
+        bob.pubkey(),
+        TokenAccount::unpack(ta_bob_info.data()).unwrap().amount
+    );
+    
 }

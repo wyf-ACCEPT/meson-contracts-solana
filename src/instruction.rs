@@ -6,42 +6,44 @@ use crate::error::MesonError;
 pub enum MesonInstruction {
     /// The admin(deployer) must call this init function first!
     /// Account data:
-    /// 1. payer_account: the contract deployer, also the admin
-    /// 2. system_program: that is `11111111111111111111111111111111`
-    /// 3. authority_account: to save the address of admin
-    /// 4. map_token_account: to save the supported coin list
+    /// 0. payer_account: the contract deployer, also the admin
+    /// 1. system_program: that is `11111111111111111111111111111111`
+    /// 2. authority_account: to save the address of admin
+    /// 3. map_token_account: to save the supported coin list
     InitContract,
 
     /// Account data:
-    /// 1. admin_account: the admin account, must be a signer
-    /// 2. authority_account
-    /// 3. new_admin: the new admin address
+    /// 0. admin_account: the admin account, must be a signer
+    /// 1. authority_account
+    /// 2. new_admin: the new admin address
     TransferPremiumManager,
 
     /// Account data:
-    /// 1. admin_account
-    /// 2. authority_account
-    /// 3. map_token_account
-    /// 4. token_mint_account: the mint address of the coin to add to support list
+    /// 0. admin_account
+    /// 1. authority_account
+    /// 2. map_token_account
+    /// 3. token_mint_account: the mint address of the coin to add to support list
     AddSupportToken { coin_index: u8 },
 
     /// Account data:
-    /// 1. payer_account
-    /// 2. system_program
-    /// 3. authorized_account: the address to add to LP pools
-    /// 4. save_poaa_account_input: the data account to save `authorized address -> pool index` pair (8-bytes long)
-    /// 5. save_oop_account_input: the data account to save `pool index -> authorized address` pair (32-bytes long)
+    /// 0. payer_account
+    /// 1. system_program
+    /// 2. authorized_account: the address to add to LP pools
+    /// 3. save_poaa_account_input: the data account to save `authorized address -> pool index` pair (8-bytes long)
+    /// 4. save_oop_account_input: the data account to save `pool index -> authorized address` pair (32-bytes long)
     RegisterPool { pool_index: u64 },
 
     /// Account data:
-    /// 1. payer_account
-    /// 2. system_program
-    /// 3. user_account: the user who wants to swap
-    /// 4. token_mint_account
+    /// 0. payer_account
+    /// 1. system_program
+    /// 2. user_account: the user who wants to swap
+    /// 3. token_mint_account
+    /// 4. token_program_info: that is `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`
     /// 5. save_map_token_account: same as `map_token_account`
     /// 6. save_ps_account_input: the data account to save `encoded -> postedSwap` pair (60-bytes)
     /// 7. ta_user_input: the token account for the user
     /// 8. ta_program_input: the token account for the program
+    /// 9. contract_signer_account_input: the account as a singer of the program contract
     PostSwap {
         encoded_swap: [u8; 32],
         signature: [u8; 64],

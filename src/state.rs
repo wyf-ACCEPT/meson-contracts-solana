@@ -14,6 +14,7 @@ use crate::error::MesonError;
 pub struct ConstantValue {}
 
 impl ConstantValue {
+    pub const CONTRACT_SIGNER: &[u8] = b"contract_signer";
     pub const AUTHORITY_PHRASE: &[u8] = b"authority";
     pub const SUPPORT_COINS_PHRASE: &[u8] = b"supported_coins";
     pub const SAVE_POSTED_SWAP_PHRASE: &[u8] = b"posted_swaps";
