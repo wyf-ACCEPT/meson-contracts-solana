@@ -48,18 +48,19 @@ pub fn post_swap<'a, 'b>(
     let amount = Utils::amount_from(encoded_swap);
     Utils::amount_within_max(amount)?;
 
-    //     // Assertion about time-lock.
-    //     let delta = MesonHelpers::expire_ts_from(encoded_swap) - timestamp::now_seconds();
-    //     assert!(delta > MesonHelpers::get_MIN_BOND_TIME_PERIOD(), ESWAP_EXPIRE_TOO_EARLY);
-    //     assert!(delta < MesonHelpers::get_MAX_BOND_TIME_PERIOD(), ESWAP_EXPIRE_TOO_LATE);
     let clock = Clock::get()?;
     let now_timestamp = clock.unix_timestamp.to_le() as u64;
-    msg!("Timestamp now: {}", now_timestamp);
-    msg!("Amount       : {}", amount);
-    // todo!();
+    let delta = Utils::expire_ts_from(encoded_swap) - now_timestamp;
+    if delta < Utils::get_min_bond_time_period() {
+        return Err(MesonError::SwapExpireTooEarly.into())
+    }
+    if delta > Utils::get_max_bond_time_period() {
+        return Err(MesonError::SwapExpireTooLate.into())
+    }
 
-    // Utils::check_request_signature(encoded_swap, signature, initiator)?;
     msg!("Signature    : {:?}", signature);
+    // Utils::check_request_signature(encoded_swap, signature, initiator)?; // todo()
+    
     state::add_posted_swap(
         program_id,
         payer_account,
@@ -92,17 +93,3 @@ pub fn post_swap<'a, 'b>(
     Ok(())
 }
 
-// public entry fun postSwap<CoinType>(
-//     sender: &signer,
-//     encoded_swap: vector<u8>,
-//     signature: vector<u8>, // must be signed by `initiator`
-//     initiator: vector<u8>, // an eth address of (20 bytes), the signer to sign for release
-//     pool_index: u64,
-// ) {
-//     MesonHelpers::check_request_signature(encoded_swap, signature, initiator);
-
-//     vector::push_back(&mut encoded_swap, 0xff); // so it cannot be identical to a swap_id
-//     MesonStates::add_posted_swap(encoded_swap, pool_index, initiator, signer::address_of(sender));
-//     let coins = coin::withdraw<CoinType>(sender, amount);
-//     MesonStates::coins_to_pending(encoded_swap, coins);
-// }

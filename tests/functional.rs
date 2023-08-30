@@ -1,10 +1,9 @@
-use arrayref::{array_ref, array_refs};
-use solana_program::system_instruction;
-use std::str::FromStr;
-
 use {
+    arrayref::{array_ref, array_refs},
+    std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}},
     meson_contracts_solana::{entrypoint::process_instruction, state::ConstantValue},
     solana_program::{
+        system_instruction, 
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         program_pack::Pack,
@@ -456,11 +455,15 @@ async fn test_all() {
     // =                       S.1 Post-swap by Alice                      =
     // =                                                                   =
     // =====================================================================
-    let encoded_swap: [u8; 32] = [
+    let mut encoded_swap: [u8; 32] = [
         0x01, 0x00, 0x00, 0xe4, 0xe1, 0xc0, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81,
         0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x01, 0xf5, 0x00, 0x01,
         0xf5, 0x00,
     ];
+    let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let expire_time_expect = (now_timestamp + 3600).to_be_bytes();
+    encoded_swap[21..26].copy_from_slice(array_ref![expire_time_expect, 3, 5]);
+
     let signature: [u8; 64] = [
         0xb3, 0x18, 0x4c, 0x25, 0x7c, 0xf9, 0x73, 0x06, 0x92, 0x50, 0xee, 0xfd, 0x84, 0x9a, 0x74,
         0xd2, 0x72, 0x50, 0xf8, 0x34, 0x3c, 0xbd, 0xa7, 0x61, 0x51, 0x91, 0x14, 0x9d, 0xd3, 0xc1,
@@ -532,5 +535,7 @@ async fn test_all() {
         bob.pubkey(),
         TokenAccount::unpack(ta_bob_info.data()).unwrap().amount
     );
+
+
     
 }

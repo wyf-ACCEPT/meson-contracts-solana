@@ -75,8 +75,15 @@ pub enum MesonError {
 
     // 17
     #[error("Swap bonded to others!")]
-    SwapBondedToOthers
+    SwapBondedToOthers,
 
+    // 18
+    #[error("Swap expires too early!")]
+    SwapExpireTooEarly,
+
+    // 19
+    #[error("Swap expires too late!")]
+    SwapExpireTooLate,
 }
 
 impl From<MesonError> for ProgramError {
