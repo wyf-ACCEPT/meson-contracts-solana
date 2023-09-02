@@ -59,6 +59,14 @@ pub enum MesonInstruction {
         encoded_swap: [u8; 32],
         pool_index: u64,
     },
+
+    /// Account data for cancel_swap():
+    /// 0. token_program_info: that is "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    /// 1. save_ps_account_input: the data account to save `encoded -> postedSwap` pair (60-bytes)
+    /// 2. ta_user_input: the token account for the user
+    /// 3. ta_program_input: the token account for the program
+    /// 4. contract_signer_account_input: the account as a singer of the program contract
+    CancelSwap { encoded_swap: [u8; 32] },
 }
 
 impl MesonInstruction {
@@ -97,6 +105,11 @@ impl MesonInstruction {
                     encoded_swap: *encoded_swap_ref,
                     pool_index: u64::from_be_bytes(*pool_index_ref),
                 }
+            }
+
+            6 => {
+                let encoded_swap = *array_ref![rest, 0, 32];
+                MesonInstruction::CancelSwap { encoded_swap }
             }
 
             _ => return Err(MesonError::InvalidInstruction),

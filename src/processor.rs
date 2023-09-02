@@ -7,7 +7,7 @@ use solana_program::{
 // use crate::state::{create_related_account, write_related_account};
 use crate::{
     instruction::MesonInstruction,
-    mesonswap::{bond_swap, post_swap},
+    mesonswap::{bond_swap, cancel_swap, post_swap},
     state::{add_support_token, init_contract, register_pool_index, transfer_admin},
 };
 
@@ -43,6 +43,9 @@ impl Processor {
                 encoded_swap,
                 pool_index,
             } => Self::process_bond_swap(program_id, accounts, encoded_swap, pool_index),
+            MesonInstruction::CancelSwap { encoded_swap } => {
+                Self::process_cancel_swap(program_id, accounts, encoded_swap)
+            }
         }
     }
 
@@ -182,6 +185,30 @@ impl Processor {
             save_ps_account_input,
             encoded_swap,
             pool_index,
+        )
+    }
+
+    fn process_cancel_swap(
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+        encoded_swap: [u8; 32],
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        let token_program_info = next_account_info(account_info_iter)?;
+        let save_ps_account_input = next_account_info(account_info_iter)?;
+        let ta_user_input = next_account_info(account_info_iter)?;
+        let ta_program_input = next_account_info(account_info_iter)?;
+        let contract_signer_account_input = next_account_info(account_info_iter)?;
+
+        cancel_swap(
+            program_id,
+            token_program_info,
+            save_ps_account_input,
+            ta_user_input,
+            ta_program_input,
+            contract_signer_account_input,
+            encoded_swap,
         )
     }
 }

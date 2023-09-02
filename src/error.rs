@@ -87,7 +87,15 @@ pub enum MesonError {
 
     // 20
     #[error("Pool index mismatch!")]
-    PoolIndexMismatch
+    PoolIndexMismatch,
+
+    // 21
+    #[error("Pool address authorized to another!")]
+    PoolAddrAuthorizedToAnother,
+
+    // 22
+    #[error("Swap cannot cancel before expire!")]
+    SwapCannotCancelBeforeExpire,
 }
 
 impl From<MesonError> for ProgramError {

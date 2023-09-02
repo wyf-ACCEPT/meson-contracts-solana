@@ -1,6 +1,7 @@
 use arrayref::array_ref;
 use solana_program::{
     account_info::AccountInfo,
+    clock::Clock,
     entrypoint::ProgramResult,
     program::invoke_signed,
     program_error::ProgramError,
@@ -9,7 +10,7 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
 };
 
-use crate::error::MesonError;
+use crate::{error::MesonError, utils::Utils};
 
 pub struct ConstantValue {}
 
@@ -21,14 +22,18 @@ impl ConstantValue {
     pub const SAVE_LOCKED_SWAP_PHRASE: &[u8] = b"locked_swaps";
     pub const SAVE_OWNER_OF_POOLS_PHRASE: &[u8] = b"pool_owners";
     pub const SAVE_POOL_OF_AUTHORIZED_ADDR_PHRASE: &[u8] = b"pool_of_authorized_addr";
+    pub const ZERO_POSTED_SWAP: &[u8] = &[0; 60];
+    pub const ZERO_LOCKED_SWAP: &[u8] = &[0; 48];
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct PostedSwap {
     pool_index: u64,
     initiator: [u8; 20],
-    from_address: Pubkey,
+    pub from_address: Pubkey,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct LockedSwap {
     pool_index: u64,
     until: u64,
@@ -157,7 +162,7 @@ fn check_pda_match<'a, 'b>(
 /* ------------------------ Check PDA account related functions ------------------------ */
 
 /// save_poaa_account_input: `poaa` -> `pool of authorized address`
-/// save_oop_account_input : `oop` -> `owner of pool`
+/// save_oop_account_input : `oop` -> `owner of pool` (pool owners)
 /// save_ps_account_input  : `ps` -> `posted swap`
 /// save_si_account_input  : `si` -> `swap id`
 
@@ -454,11 +459,46 @@ pub fn add_authorized<'a, 'b>(
     Ok(())
 }
 
-// remove_authorized todo()
+// pub fn remove_authorized<'a, 'b>(
+//     program_id: &Pubkey,
+//     pool_index: u64,
+//     authorized_account_input: &'a AccountInfo<'b>,
+//     save_oop_account_input: &'a AccountInfo<'b>,
+//     save_poaa_account_input: &'a AccountInfo<'b>,
+// ) -> ProgramResult {
+//     if pool_index == 0 {
+//         return Err(MesonError::PoolIndexCannotBeZero.into());
+//     }
+//     let pool_owner_expected = Pubkey::from()
+//     let pool_index_expected =
+//         u64::from_be_bytes(*array_ref![save_poaa_account_input.data.borrow(), 0, 8]);
+//     check_poaa_directly(
+//         program_id,
+//         authorized_account_input,
+//         save_poaa_account_input,
+//     )?;
+// }    todo()
 
-// transfer_pool_owner todo()
+// pub fn transfer_pool_owner<'a, 'b>(
+//     program_id: &Pubkey,
+//     pool_index: u64,
+//     authorized_account_input: &'a AccountInfo<'b>,
+//     save_poaa_account_input: &'a AccountInfo<'b>,
+// ) -> ProgramResult {
+//     if pool_index == 0 {
+//         return Err(MesonError::PoolIndexCannotBeZero.into());
+//     }
+//     check_poaa_directly(program_id, authorized_account_input, save_poaa_account_input)?;
 
-/* ------------------------ Deal with posted-swap/locked-swap tables ------------------------ */
+//     let poaa_data = save_poaa_account_input.data.borrow();
+//     let pool_index_expected = u64::from_be_bytes(*array_ref![poaa_data, 0, 8]);
+//     if pool_index != pool_index_expected {
+//         return Err(MesonError::PoolAddrAuthorizedToAnother.into());
+//     }
+//     Ok(())
+// }    todo()
+
+/* ------------------------ Deal with posted-swap tables ------------------------ */
 
 pub fn add_posted_swap<'a, 'b>(
     program_id: &Pubkey,
@@ -499,8 +539,8 @@ pub fn bond_posted_swap<'a, 'b>(
     save_ps_account_input: &'a AccountInfo<'b>,
 ) -> ProgramResult {
     check_postedswap_directly(program_id, encoded_swap, save_ps_account_input)?;
-    let temp_data = save_ps_account_input.data.borrow();
-    let mut posted = PostedSwap::unpack(*array_ref![temp_data, 0, 60]);
+    let ps_data = save_ps_account_input.data.borrow();
+    let mut posted = PostedSwap::unpack(*array_ref![ps_data, 0, 60]);
     if posted.from_address == Pubkey::from([0; 32]) {
         Err(MesonError::SwapNotExists.into())
     } else if posted.pool_index != 0 {
@@ -511,7 +551,39 @@ pub fn bond_posted_swap<'a, 'b>(
     }
 }
 
-// remove_posted_swap todo()
+pub fn remove_posted_swap<'a, 'b>(
+    program_id: &Pubkey,
+    encoded_swap: [u8; 32],
+    save_ps_account_input: &'a AccountInfo<'b>,
+) -> Result<PostedSwap, ProgramError> {
+    check_postedswap_directly(program_id, encoded_swap, save_ps_account_input)?;
+    let ps_data = save_ps_account_input.data.borrow();
+    let posted_origin = PostedSwap::unpack(*array_ref![ps_data, 0, 60]);
+    if posted_origin.from_address == Pubkey::from([0; 32]) {
+        return Err(MesonError::SwapNotExists.into());
+    }
+
+    let clock = Clock::get()?;
+    let now_timestamp = clock.unix_timestamp.to_le() as u64;
+
+    if Utils::expire_ts_from(encoded_swap) < now_timestamp + Utils::get_min_bond_time_period() {
+        // to simulate `table::remove`
+        write_related_account(save_ps_account_input, ConstantValue::ZERO_POSTED_SWAP)?;
+    } else {
+        write_related_account(
+            save_ps_account_input,
+            &(PostedSwap {
+                pool_index: posted_origin.pool_index,
+                initiator: posted_origin.initiator,
+                from_address: Pubkey::from([0; 32]),
+            })
+            .pack(),
+        )?;
+    }
+    Ok(posted_origin)
+}
+
+/* ------------------------ Deal with locked-swap tables ------------------------ */
 
 pub fn add_locked_swap<'a, 'b>(
     program_id: &Pubkey,
@@ -545,7 +617,34 @@ pub fn add_locked_swap<'a, 'b>(
     Ok(())
 }
 
-// remove_locked_swap todo()
+pub fn remove_locked_swap<'a, 'b>(
+    program_id: &Pubkey,
+    swap_id: [u8; 32],
+    save_si_account_input: &'a AccountInfo<'b>,
+) -> Result<LockedSwap, ProgramError> {
+    check_lockedswap_directly(program_id, swap_id, save_si_account_input)?;
+    let ls_data = save_si_account_input.data.borrow();
+    let locked_origin = LockedSwap::unpack(*array_ref![ls_data, 0, 48]);
+    if locked_origin.until == 0 {
+        return Err(MesonError::SwapNotExists.into());
+    }
 
-/* ------------------------ Deal with tokens/liquidity ------------------------ */
+    let clock = Clock::get()?;
+    let now_timestamp = clock.unix_timestamp.to_le() as u64;
 
+    if locked_origin.until > now_timestamp {
+        write_related_account(
+            save_si_account_input,
+            &(LockedSwap {
+                pool_index: locked_origin.pool_index,
+                until: 0,
+                recipient: locked_origin.recipient,
+            })
+            .pack(),
+        )?;
+    } else {
+        write_related_account(save_si_account_input, ConstantValue::ZERO_LOCKED_SWAP)?;
+    }
+
+    Ok(locked_origin)
+}

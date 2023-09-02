@@ -96,7 +96,8 @@ pub fn bond_swap<'a, 'b>(
     encoded_swap: [u8; 32],
     pool_index: u64,
 ) -> ProgramResult {
-    let pool_index_expected = state::pool_index_of(program_id, sender_account, save_poaa_account_input)?;
+    let pool_index_expected =
+        state::pool_index_of(program_id, sender_account, save_poaa_account_input)?;
     if pool_index != pool_index_expected {
         Err(MesonError::PoolIndexMismatch.into())
     } else {
@@ -104,7 +105,49 @@ pub fn bond_swap<'a, 'b>(
     }
 }
 
-// cancelSwap todo()!
+pub fn cancel_swap<'a, 'b>(
+    program_id: &Pubkey,
+    token_program_info: &'a AccountInfo<'b>,
+    save_ps_account_input: &'a AccountInfo<'b>,
+    ta_user_input: &'a AccountInfo<'b>,
+    ta_program_input: &'a AccountInfo<'b>,
+    contract_signer_account_input: &'a AccountInfo<'b>,
+    encoded_swap: [u8; 32],
+) -> ProgramResult {
+    let clock = Clock::get()?;
+    let now_timestamp = clock.unix_timestamp.to_le() as u64;
+    let expire_ts = Utils::expire_ts_from(encoded_swap);
+    if expire_ts > now_timestamp {
+        return Err(MesonError::SwapCannotCancelBeforeExpire.into());
+    }
+
+    let (expected_contract_signer, bump_seed) =
+        Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], program_id);
+    if expected_contract_signer != *contract_signer_account_input.key {
+        return Err(MesonError::PdaAccountMismatch.into());
+    }
+    let posted = state::remove_posted_swap(program_id, encoded_swap, save_ps_account_input)?;
+    let amount = Utils::amount_from(encoded_swap);
+    
+    invoke_signed(
+        &transfer(
+            token_program_info.key,
+            ta_program_input.key,
+            &posted.from_address,
+            &expected_contract_signer,
+            &[],
+            amount,
+        )
+        .unwrap(),
+        &[
+            ta_program_input.clone(),
+            ta_user_input.clone(),
+            contract_signer_account_input.clone(),
+        ],
+        &[&[ConstantValue::CONTRACT_SIGNER, &[bump_seed]]],
+    )?;
+    Ok(())
+}
 
 // pub fn execute_swap<'a, 'b>(
 //     program_id: &Pubkey,
