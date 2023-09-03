@@ -195,6 +195,7 @@ impl Processor {
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
 
+        let token_mint_account = next_account_info(account_info_iter)?;
         let token_program_info = next_account_info(account_info_iter)?;
         let save_ps_account_input = next_account_info(account_info_iter)?;
         let ta_user_input = next_account_info(account_info_iter)?;
@@ -203,6 +204,7 @@ impl Processor {
 
         cancel_swap(
             program_id,
+            token_mint_account,
             token_program_info,
             save_ps_account_input,
             ta_user_input,

@@ -125,7 +125,7 @@ fn write_related_account<'a, 'b>(
     map_account: &'a AccountInfo<'b>,
     content: &[u8],
 ) -> ProgramResult {
-    // // Don't need to check beacuse only this program can rewrite the value
+    // Don't need to check beacuse only this program can rewrite the value
     let mut account_data = map_account.data.borrow_mut();
     account_data.copy_from_slice(content);
     Ok(())
@@ -539,15 +539,27 @@ pub fn bond_posted_swap<'a, 'b>(
     save_ps_account_input: &'a AccountInfo<'b>,
 ) -> ProgramResult {
     check_postedswap_directly(program_id, encoded_swap, save_ps_account_input)?;
-    let ps_data = save_ps_account_input.data.borrow();
-    let mut posted = PostedSwap::unpack(*array_ref![ps_data, 0, 60]);
-    if posted.from_address == Pubkey::from([0; 32]) {
+    let posted_origin;
+    {
+        let ps_data = save_ps_account_input.data.borrow();
+        posted_origin = PostedSwap::unpack(*array_ref![ps_data, 0, 60]);
+    }
+    // *Note: We must put these two lines into a seperate block, otherwise the variable `save_ps_account_input` cannot be used in the function `write_related_account` below, because it has already been borrowed here.
+
+    if posted_origin.from_address == Pubkey::from([0; 32]) {
         Err(MesonError::SwapNotExists.into())
-    } else if posted.pool_index != 0 {
+    } else if posted_origin.pool_index != 0 {
         Err(MesonError::SwapBondedToOthers.into())
     } else {
-        posted.pool_index = pool_index;
-        write_related_account(save_ps_account_input, &posted.pack())
+        write_related_account(
+            save_ps_account_input,
+            &(PostedSwap {
+                pool_index,
+                initiator: posted_origin.initiator,
+                from_address: posted_origin.from_address,
+            })
+            .pack(),
+        )
     }
 }
 
@@ -557,8 +569,11 @@ pub fn remove_posted_swap<'a, 'b>(
     save_ps_account_input: &'a AccountInfo<'b>,
 ) -> Result<PostedSwap, ProgramError> {
     check_postedswap_directly(program_id, encoded_swap, save_ps_account_input)?;
-    let ps_data = save_ps_account_input.data.borrow();
-    let posted_origin = PostedSwap::unpack(*array_ref![ps_data, 0, 60]);
+    let posted_origin;
+    {
+        let ps_data = save_ps_account_input.data.borrow();
+        posted_origin = PostedSwap::unpack(*array_ref![ps_data, 0, 60]);
+    }   // See the annotation in `bond_posted_swap` function.
     if posted_origin.from_address == Pubkey::from([0; 32]) {
         return Err(MesonError::SwapNotExists.into());
     }
@@ -623,8 +638,11 @@ pub fn remove_locked_swap<'a, 'b>(
     save_si_account_input: &'a AccountInfo<'b>,
 ) -> Result<LockedSwap, ProgramError> {
     check_lockedswap_directly(program_id, swap_id, save_si_account_input)?;
-    let ls_data = save_si_account_input.data.borrow();
-    let locked_origin = LockedSwap::unpack(*array_ref![ls_data, 0, 48]);
+    let locked_origin;
+    {
+        let ls_data = save_si_account_input.data.borrow();
+        locked_origin = LockedSwap::unpack(*array_ref![ls_data, 0, 48]);
+    }   // See the annotation in `bond_posted_swap` function.
     if locked_origin.until == 0 {
         return Err(MesonError::SwapNotExists.into());
     }

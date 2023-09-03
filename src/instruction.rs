@@ -4,28 +4,29 @@ use crate::error::MesonError;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MesonInstruction {
-    /// The admin(deployer) must call this init function first!
-    /// Account data:
+    // The admin(deployer) must call this init function first!
+    
+    /// [0]
     /// 0. payer_account: the contract deployer, also the admin
     /// 1. system_program: that is `11111111111111111111111111111111`
     /// 2. authority_account: to save the address of admin
     /// 3. map_token_account: to save the supported coin list
     InitContract,
 
-    /// Account data:
+    /// [1]
     /// 0. admin_account: the admin account, must be a signer
     /// 1. authority_account
     /// 2. new_admin: the new admin address
     TransferPremiumManager,
 
-    /// Account data:
+    /// [2]
     /// 0. admin_account
     /// 1. authority_account
     /// 2. map_token_account
     /// 3. token_mint_account: the mint address of the coin to add to support list
     AddSupportToken { coin_index: u8 },
 
-    /// Account data:
+    /// [3]
     /// 0. payer_account
     /// 1. system_program
     /// 2. authorized_account: the address to add to LP pools
@@ -33,7 +34,7 @@ pub enum MesonInstruction {
     /// 4. save_oop_account_input: the data account to save `pool index -> authorized address` pair (32-bytes long)
     RegisterPool { pool_index: u64 },
 
-    /// Account data for post_swap():
+    /// [4]
     /// 0. payer_account
     /// 1. system_program
     /// 2. user_account: the user who wants to swap
@@ -51,7 +52,7 @@ pub enum MesonInstruction {
         pool_index: u64,
     },
 
-    /// Account data for bond_swap():
+    /// [5]
     /// 0. sender_account: same as `authorized_account`
     /// 1. save_poaa_account_input
     /// 2. save_ps_account_input
@@ -60,12 +61,13 @@ pub enum MesonInstruction {
         pool_index: u64,
     },
 
-    /// Account data for cancel_swap():
-    /// 0. token_program_info: that is "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-    /// 1. save_ps_account_input: the data account to save `encoded -> postedSwap` pair (60-bytes)
-    /// 2. ta_user_input: the token account for the user
-    /// 3. ta_program_input: the token account for the program
-    /// 4. contract_signer_account_input: the account as a singer of the program contract
+    /// [6]
+    /// 0. token_mint_account
+    /// 1. token_program_info
+    /// 2. save_ps_account_input
+    /// 3. ta_user_input
+    /// 4. ta_program_input
+    /// 5. contract_signer_account_input
     CancelSwap { encoded_swap: [u8; 32] },
 }
 

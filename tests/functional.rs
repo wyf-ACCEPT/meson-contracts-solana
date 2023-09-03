@@ -452,10 +452,10 @@ async fn test_all() {
 
     // =====================================================================
     // =                                                                   =
-    // =                       S.1 Post-swap by Alice                      =
+    // =                    Step.1.1 Post-swap by Bob                      =
     // =                                                                   =
     // =====================================================================
-    println!("\n================== S.1 Post Swap ==================");
+    println!("\n================== Step 1.1 Post Swap ==================");
     let mut encoded_swap: [u8; 32] = [
         0x01, 0x00, 0x00, 0xe4, 0xe1, 0xc0, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81,
         0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x01, 0xf5, 0x00, 0x01,
@@ -485,7 +485,7 @@ async fn test_all() {
     data_input_array[1..33].copy_from_slice(&encoded_swap);
     data_input_array[33..97].copy_from_slice(&signature);
     data_input_array[97..117].copy_from_slice(&initiator);
-    data_input_array[117..125].copy_from_slice(&alice_pool_index.to_be_bytes());
+    data_input_array[117..125].copy_from_slice(&(0 as u64).to_be_bytes());
 
     let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
     let transaction = Transaction::new_signed_with_payer(
@@ -535,6 +535,42 @@ async fn test_all() {
         TokenAccount::unpack(ta_bob_info.data()).unwrap().amount
     );
 
+    // =====================================================================
+    // =                                                                   =
+    // =                    Step.1.2 Bond-swap by Alice                    =
+    // =                                                                   =
+    // =====================================================================
+    println!("\n================== Step 1.2 Bond Swap ==================");
 
+    let mut data_input_array = [5 as u8; 41];
+    data_input_array[1..33].copy_from_slice(&encoded_swap);
+    data_input_array[33..41].copy_from_slice(&alice_pool_index.to_be_bytes());
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[Instruction::new_with_bytes(
+            program_id,
+            &data_input_array,
+            vec![
+                AccountMeta::new(alice.pubkey(), true),
+                AccountMeta::new(save_poaa_pubkey_alice, false),
+                AccountMeta::new(save_ps_pubkey, false),
+            ],
+        )],
+        Some(&payer.pubkey()),
+        &[&payer, &alice],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
     
+    println!("Data account for post-swap: {}", save_ps_pubkey);
+    let ps_info = get_account_info(&mut banks_client, save_ps_pubkey).await;
+    let (pool_index, initiator, from_address) =
+        array_refs![array_ref![ps_info.data(), 0, 60], 8, 20, 32];
+    println!(
+        "Data inside after bond-swap:\n\tPool index: {}\n\tInitiator: {:?}\n\tFrom addr: {}",
+        u64::from_be_bytes(*pool_index),
+        initiator,
+        Pubkey::from(*from_address)
+    );
 }

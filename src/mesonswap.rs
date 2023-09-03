@@ -1,8 +1,8 @@
 use solana_program::{
     account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult, msg,
-    program::invoke_signed, pubkey::Pubkey, sysvar::Sysvar,
+    program::invoke_signed, pubkey::Pubkey, sysvar::Sysvar, program_pack::Pack,
 };
-use spl_token::instruction::transfer;
+use spl_token::{instruction::transfer_checked, state::Mint};
 
 use crate::{
     error::MesonError,
@@ -67,18 +67,22 @@ pub fn post_swap<'a, 'b>(
         save_ps_account_input,
     )?;
 
+    let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
     invoke_signed(
-        &transfer(
+        &transfer_checked(
             token_program_info.key,
             ta_user_input.key,
+            token_mint_account.key,
             ta_program_input.key,
             user_account.key,
             &[],
             amount,
+            decimals,
         )
         .unwrap(),
         &[
             ta_user_input.clone(),
+            token_mint_account.clone(),
             ta_program_input.clone(),
             user_account.clone(),
         ],
@@ -107,6 +111,7 @@ pub fn bond_swap<'a, 'b>(
 
 pub fn cancel_swap<'a, 'b>(
     program_id: &Pubkey,
+    token_mint_account: &'a AccountInfo<'b>,
     token_program_info: &'a AccountInfo<'b>,
     save_ps_account_input: &'a AccountInfo<'b>,
     ta_user_input: &'a AccountInfo<'b>,
@@ -129,18 +134,22 @@ pub fn cancel_swap<'a, 'b>(
     let posted = state::remove_posted_swap(program_id, encoded_swap, save_ps_account_input)?;
     let amount = Utils::amount_from(encoded_swap);
     
+    let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
     invoke_signed(
-        &transfer(
+        &transfer_checked(
             token_program_info.key,
             ta_program_input.key,
+            token_mint_account.key,
             &posted.from_address,
             &expected_contract_signer,
             &[],
             amount,
+            decimals,
         )
         .unwrap(),
         &[
             ta_program_input.clone(),
+            token_mint_account.clone(),
             ta_user_input.clone(),
             contract_signer_account_input.clone(),
         ],
