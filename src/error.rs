@@ -96,6 +96,10 @@ pub enum MesonError {
     // 22
     #[error("Swap cannot cancel before expire!")]
     SwapCannotCancelBeforeExpire,
+
+    // 23
+    #[error("Token account information mismatch!")]
+    TokenAccountMismatch,
 }
 
 impl From<MesonError> for ProgramError {

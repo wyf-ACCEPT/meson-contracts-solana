@@ -5,7 +5,6 @@ use crate::error::MesonError;
 #[derive(Clone, Debug, PartialEq)]
 pub enum MesonInstruction {
     // The admin(deployer) must call this init function first!
-    
     /// [0]
     /// 0. payer_account: the contract deployer, also the admin
     /// 1. system_program: that is `11111111111111111111111111111111`
@@ -69,6 +68,20 @@ pub enum MesonInstruction {
     /// 4. ta_program_input
     /// 5. contract_signer_account_input
     CancelSwap { encoded_swap: [u8; 32] },
+
+    /// [7]
+    /// 0. token_mint_account
+    /// 1. token_program_info
+    /// 2. save_ps_account_input
+    /// 3. save_oop_account_input
+    /// 4. ta_lp_input: the token account for lp (the owner of pool_index)
+    /// 5. ta_program_input
+    /// 6. contract_signer_account_input
+    ExecuteSwap {
+        encoded_swap: [u8; 32],
+        signature: [u8; 64],
+        recipient: [u8; 20],
+    },
 }
 
 impl MesonInstruction {
@@ -112,6 +125,17 @@ impl MesonInstruction {
             6 => {
                 let encoded_swap = *array_ref![rest, 0, 32];
                 MesonInstruction::CancelSwap { encoded_swap }
+            }
+
+            7 => {
+                let rest_fix = *array_ref![rest, 0, 116];
+                let (encoded_swap_ref, signature_ref, recipient_ref) =
+                    array_refs![&rest_fix, 32, 64, 20];
+                MesonInstruction::ExecuteSwap {
+                    encoded_swap: *encoded_swap_ref,
+                    signature: *signature_ref,
+                    recipient: *recipient_ref,
+                }
             }
 
             _ => return Err(MesonError::InvalidInstruction),

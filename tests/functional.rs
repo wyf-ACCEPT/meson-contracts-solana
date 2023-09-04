@@ -1,14 +1,12 @@
 use {
     arrayref::{array_ref, array_refs},
-    std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}},
     meson_contracts_solana::{entrypoint::process_instruction, state::ConstantValue},
     solana_program::{
-        system_instruction, 
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         program_pack::Pack,
         pubkey::Pubkey,
-        system_program,
+        system_instruction, system_program,
         sysvar::rent::Rent,
     },
     solana_program_test::*,
@@ -21,6 +19,10 @@ use {
         self,
         state::{Account as TokenAccount, Mint},
     },
+    std::{
+        str::FromStr,
+        time::{SystemTime, UNIX_EPOCH},
+    },
 };
 
 async fn get_account_info(banks_client: &mut BanksClient, account: Pubkey) -> Account {
@@ -32,6 +34,39 @@ async fn update_blockhash(banks_client: &mut BanksClient, recent_blockhash: Hash
         .get_new_latest_blockhash(&recent_blockhash)
         .await
         .unwrap()
+}
+
+async fn show_usdc_balance_all(
+    banks_client: &mut BanksClient,
+    ta_program: &Keypair,
+    ta_alice: &Keypair,
+    ta_bob: &Keypair,
+    program_id: &Pubkey,
+    alice: &Keypair,
+    bob: &Keypair,
+    step: &str,
+) {
+    let ta_program_info = get_account_info(banks_client, ta_program.pubkey()).await;
+    let ta_alice_info = get_account_info(banks_client, ta_alice.pubkey()).await;
+    let ta_bob_info = get_account_info(banks_client, ta_bob.pubkey()).await;
+    println!(
+        "After {}: USDC Balance of [Program] ({}): {:?}",
+        step,
+        program_id,
+        TokenAccount::unpack(ta_program_info.data()).unwrap().amount
+    );
+    println!(
+        "After {}: USDC Balance of [ Alice ] ({}): {:?}",
+        step,
+        alice.pubkey(),
+        TokenAccount::unpack(ta_alice_info.data()).unwrap().amount
+    );
+    println!(
+        "After {}: USDC Balance of [  Bob  ] ({}): {:?}",
+        step,
+        bob.pubkey(),
+        TokenAccount::unpack(ta_bob_info.data()).unwrap().amount
+    );
 }
 
 #[tokio::test]
@@ -390,24 +425,17 @@ async fn test_all() {
     );
     banks_client.process_transaction(transaction).await.unwrap();
 
-    let ta_program_info = get_account_info(&mut banks_client, ta_program.pubkey()).await;
-    let ta_alice_info = get_account_info(&mut banks_client, ta_alice.pubkey()).await;
-    let ta_bob_info = get_account_info(&mut banks_client, ta_bob.pubkey()).await;
-    println!(
-        "USDC Balance of [Program] ({}): {:?}",
-        program_id,
-        TokenAccount::unpack(ta_program_info.data()).unwrap().amount
-    );
-    println!(
-        "USDC Balance of [ Alice ] ({}): {:?}",
-        alice.pubkey(),
-        TokenAccount::unpack(ta_alice_info.data()).unwrap().amount
-    );
-    println!(
-        "USDC Balance of [  Bob  ] ({}): {:?}",
-        bob.pubkey(),
-        TokenAccount::unpack(ta_bob_info.data()).unwrap().amount
-    );
+    show_usdc_balance_all(
+        &mut banks_client,
+        &ta_program,
+        &ta_alice,
+        &ta_bob,
+        &program_id,
+        &alice,
+        &bob,
+        "minting",
+    )
+    .await;
 
     println!("\n================== Approve ==================");
     let approve_amount = 400_000_000;
@@ -461,11 +489,14 @@ async fn test_all() {
         0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x01, 0xf5, 0x00, 0x01,
         0xf5, 0x00,
     ];
-    let now_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let now_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     let expire_time_expect = (now_timestamp + 3600).to_be_bytes();
     encoded_swap[21..26].copy_from_slice(array_ref![expire_time_expect, 3, 5]);
 
-    let signature: [u8; 64] = [
+    let fake_signature_request: [u8; 64] = [
         0xb3, 0x18, 0x4c, 0x25, 0x7c, 0xf9, 0x73, 0x06, 0x92, 0x50, 0xee, 0xfd, 0x84, 0x9a, 0x74,
         0xd2, 0x72, 0x50, 0xf8, 0x34, 0x3c, 0xbd, 0xa7, 0x61, 0x51, 0x91, 0x14, 0x9d, 0xd3, 0xc1,
         0xb6, 0x1d, 0x5d, 0x4e, 0x2b, 0x5e, 0xcc, 0x76, 0xa5, 0x9b, 0xaa, 0xbf, 0x10, 0xa8, 0xd5,
@@ -483,7 +514,7 @@ async fn test_all() {
 
     let mut data_input_array = [4 as u8; 125];
     data_input_array[1..33].copy_from_slice(&encoded_swap);
-    data_input_array[33..97].copy_from_slice(&signature);
+    data_input_array[33..97].copy_from_slice(&fake_signature_request);
     data_input_array[97..117].copy_from_slice(&initiator);
     data_input_array[117..125].copy_from_slice(&(0 as u64).to_be_bytes());
 
@@ -521,19 +552,18 @@ async fn test_all() {
         initiator,
         Pubkey::from(*from_address)
     );
-   
-    let ta_program_info = get_account_info(&mut banks_client, ta_program.pubkey()).await;
-    let ta_bob_info = get_account_info(&mut banks_client, ta_bob.pubkey()).await; 
-    println!(
-        "After post-swap: USDC Balance of [Program] ({}): {:?}",
-        program_id,
-        TokenAccount::unpack(ta_program_info.data()).unwrap().amount
-    );
-    println!(
-        "After post-swap: USDC Balance of [  Bob  ] ({}): {:?}",
-        bob.pubkey(),
-        TokenAccount::unpack(ta_bob_info.data()).unwrap().amount
-    );
+
+    show_usdc_balance_all(
+        &mut banks_client,
+        &ta_program,
+        &ta_alice,
+        &ta_bob,
+        &program_id,
+        &alice,
+        &bob,
+        "post-swap",
+    )
+    .await;
 
     // =====================================================================
     // =                                                                   =
@@ -562,7 +592,7 @@ async fn test_all() {
         recent_blockhash,
     );
     banks_client.process_transaction(transaction).await.unwrap();
-    
+
     println!("Data account for post-swap: {}", save_ps_pubkey);
     let ps_info = get_account_info(&mut banks_client, save_ps_pubkey).await;
     let (pool_index, initiator, from_address) =
@@ -573,4 +603,71 @@ async fn test_all() {
         initiator,
         Pubkey::from(*from_address)
     );
+
+    // =====================================================================
+    // =                                                                   =
+    // =                    Step 4. Execute-swap by Alice                   =
+    // =                                                                   =
+    // =====================================================================
+    println!("\n================== Step 4. Execute Swap ==================");
+
+    let fake_signature_release = [
+        0x12, 0x05, 0x36, 0x1a, 0xab, 0xc8, 0x9e, 0x5b, 0x30, 0x59, 0x2a, 0x2c, 0x95, 0x59, 0x2d,
+        0xdc, 0x12, 0x70, 0x50, 0x61, 0x0e, 0xfe, 0x92, 0xff, 0x64, 0x55, 0xc5, 0xcf, 0xd4, 0x3b,
+        0xdd, 0x82, 0x58, 0x53, 0xed, 0xcf, 0x1f, 0xa7, 0x2f, 0x10, 0x99, 0x2b, 0x46, 0x72, 0x1d,
+        0x17, 0xcb, 0x31, 0x91, 0xa8, 0x5c, 0xef, 0xd2, 0xf8, 0x32, 0x5b, 0x1a, 0xc5, 0x9c, 0x7d,
+        0x49, 0x8f, 0xa2, 0x12,
+    ];
+    let recipient = [
+        0x01, 0x01, 0x5a, 0xce, 0x92, 0x0c, 0x71, 0x67, 0x94, 0x44, 0x59, 0x79, 0xbe, 0x68, 0xd4,
+        0x02, 0xd2, 0x8b, 0x28, 0x05,
+    ];
+
+    let mut data_input_array = [7 as u8; 117];
+    data_input_array[1..33].copy_from_slice(&encoded_swap);
+    data_input_array[33..97].copy_from_slice(&fake_signature_release);
+    data_input_array[97..117].copy_from_slice(&recipient);
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[Instruction::new_with_bytes(
+            program_id,
+            &data_input_array,
+            vec![
+                AccountMeta::new(mint_pubkey, false),
+                AccountMeta::new(spl_token::id(), false),
+                AccountMeta::new(save_ps_pubkey, false),
+                AccountMeta::new(save_oop_pubkey_alice, false),
+                AccountMeta::new(ta_alice.pubkey(), false),
+                AccountMeta::new(ta_program.pubkey(), false),
+                AccountMeta::new(contract_signer_pubkey, false),
+            ],
+        )],
+        Some(&payer.pubkey()),
+        &[&payer],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+
+    println!("Data account for post-swap: {}", save_ps_pubkey);
+    let ps_info = get_account_info(&mut banks_client, save_ps_pubkey).await;
+    let (pool_index, initiator, from_address) =
+        array_refs![array_ref![ps_info.data(), 0, 60], 8, 20, 32];
+    println!(
+        "Data inside after execute-swap:\n\tPool index: {}\n\tInitiator: {:?}\n\tFrom addr: {}",
+        u64::from_be_bytes(*pool_index),
+        initiator,
+        Pubkey::from(*from_address)
+    );
+    show_usdc_balance_all(
+        &mut banks_client,
+        &ta_program,
+        &ta_alice,
+        &ta_bob,
+        &program_id,
+        &alice,
+        &bob,
+        "execute-swap",
+    )
+    .await;
 }

@@ -28,16 +28,16 @@ impl ConstantValue {
 
 #[derive(Debug, Clone, Copy)]
 pub struct PostedSwap {
-    pool_index: u64,
-    initiator: [u8; 20],
+    pub pool_index: u64,
+    pub initiator: [u8; 20],
     pub from_address: Pubkey,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct LockedSwap {
-    pool_index: u64,
-    until: u64,
-    recipient: Pubkey,
+    pub pool_index: u64,
+    pub until: u64,
+    pub recipient: Pubkey,
 }
 
 impl PostedSwap {

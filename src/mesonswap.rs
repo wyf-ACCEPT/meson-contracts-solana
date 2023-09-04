@@ -1,12 +1,15 @@
 use solana_program::{
     account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult, msg,
-    program::invoke_signed, pubkey::Pubkey, sysvar::Sysvar, program_pack::Pack,
+    program::invoke_signed, program_pack::Pack, pubkey::Pubkey, sysvar::Sysvar,
 };
-use spl_token::{instruction::transfer_checked, state::Mint};
+use spl_token::{
+    instruction::transfer_checked,
+    state::{Account as TokenAccount, Mint},
+};
 
 use crate::{
     error::MesonError,
-    state::{self, ConstantValue},
+    state::{self, owner_of_pool, ConstantValue, PostedSwap},
     utils::Utils,
 };
 
@@ -132,15 +135,20 @@ pub fn cancel_swap<'a, 'b>(
         return Err(MesonError::PdaAccountMismatch.into());
     }
     let posted = state::remove_posted_swap(program_id, encoded_swap, save_ps_account_input)?;
+
+    let user_pubkey_expected = TokenAccount::unpack(&ta_user_input.data.borrow())?.owner;
+    if posted.from_address != user_pubkey_expected {
+        return Err(MesonError::TokenAccountMismatch.into());
+    }
     let amount = Utils::amount_from(encoded_swap);
-    
     let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
+
     invoke_signed(
         &transfer_checked(
             token_program_info.key,
             ta_program_input.key,
             token_mint_account.key,
-            &posted.from_address,
+            ta_user_input.key,
             &expected_contract_signer,
             &[],
             amount,
@@ -158,36 +166,68 @@ pub fn cancel_swap<'a, 'b>(
     Ok(())
 }
 
-// pub fn execute_swap<'a, 'b>(
-//     program_id: &Pubkey,
-//     encoded_swap: [u8; 32],
-//     signature: [u8; 64],
-//     recipient: [u8; 20],
-//     // deposit_to_pool: todo()
-// ) -> ProgramResult {
-// //     let posted_swap_key = copy encoded_swap;
-// //     vector::push_back(&mut posted_swap_key, 0xff); // so it cannot be identical to a swap_id
+pub fn execute_swap<'a, 'b>(
+    program_id: &Pubkey,
+    token_mint_account: &'a AccountInfo<'b>,
+    token_program_info: &'a AccountInfo<'b>,
+    save_ps_account_input: &'a AccountInfo<'b>,
+    save_oop_account_input: &'a AccountInfo<'b>,
+    ta_lp_input: &'a AccountInfo<'b>,
+    ta_program_input: &'a AccountInfo<'b>,
+    contract_signer_account_input: &'a AccountInfo<'b>,
+    encoded_swap: [u8; 32],
+    signature: [u8; 64],
+    recipient: [u8; 20],
+    // deposit_to_pool: todo(), default false
+) -> ProgramResult {
+    let (expected_contract_signer, bump_seed) =
+        Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], program_id);
+    if expected_contract_signer != *contract_signer_account_input.key {
+        return Err(MesonError::PdaAccountMismatch.into());
+    }
 
-//     Ok(())
-// }
+    let PostedSwap {
+        pool_index,
+        initiator,
+        from_address: _,
+    } = state::remove_posted_swap(program_id, encoded_swap, save_ps_account_input)?;
 
-// public entry fun executeSwap<CoinType>(
-//     _sender: &signer, // signer could be anyone
-//     encoded_swap: vector<u8>,
-//     signature: vector<u8>,
-//     recipient: vector<u8>,
-//     deposit_to_pool: bool,
-// ) {
+    if pool_index == 0 {
+        return Err(MesonError::PoolIndexCannotBeZero.into());
+    }
 
-//     let (pool_index, initiator, _) = MesonStates::remove_posted_swap(posted_swap_key);
-//     assert!(pool_index != 0, EPOOL_INDEX_CANNOT_BE_ZERO);
+    msg!("Signature    : {:?}", signature);
+    msg!("Recipient    : {:?}", recipient);
+    msg!("Initiator    : {:?}", initiator);
+    // Utils::check_release_signature(encoded_swap, recipient, signature, initiator)?;
 
-//     MesonHelpers::check_release_signature(encoded_swap, recipient, signature, initiator);
+    let lp_pubkey = owner_of_pool(program_id, pool_index, save_oop_account_input)?;
+    let lp_pubkey_expected = TokenAccount::unpack(&ta_lp_input.data.borrow())?.owner;
+    if lp_pubkey != lp_pubkey_expected {
+        return Err(MesonError::TokenAccountMismatch.into());
+    }
+    let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
+    let amount = Utils::amount_from(encoded_swap);
 
-//     let coins = MesonStates::coins_from_pending(posted_swap_key);
-//     if (deposit_to_pool) {
-//         MesonStates::coins_to_pool<CoinType>(pool_index, coins);
-//     } else {
-//         coin::deposit<CoinType>(MesonStates::owner_of_pool(pool_index), coins);
-//     }
-// }
+    invoke_signed(
+        &transfer_checked(
+            token_program_info.key,
+            ta_program_input.key,
+            token_mint_account.key,
+            ta_lp_input.key,
+            &expected_contract_signer,
+            &[],
+            amount,
+            decimals,
+        )
+        .unwrap(),
+        &[
+            ta_program_input.clone(),
+            token_mint_account.clone(),
+            ta_lp_input.clone(),
+            contract_signer_account_input.clone(),
+        ],
+        &[&[ConstantValue::CONTRACT_SIGNER, &[bump_seed]]],
+    )?;
+    Ok(())
+}
