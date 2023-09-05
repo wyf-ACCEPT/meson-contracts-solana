@@ -22,6 +22,7 @@ impl ConstantValue {
     pub const SAVE_LOCKED_SWAP_PHRASE: &[u8] = b"locked_swaps";
     pub const SAVE_OWNER_OF_POOLS_PHRASE: &[u8] = b"pool_owners";
     pub const SAVE_POOL_OF_AUTHORIZED_ADDR_PHRASE: &[u8] = b"pool_of_authorized_addr";
+    pub const SAVE_BALANCE_PHRASE: &[u8] = b"balance_for_pool_and_token";
     pub const ZERO_POSTED_SWAP: &[u8] = &[0; 60];
     pub const ZERO_LOCKED_SWAP: &[u8] = &[0; 48];
 }
@@ -78,7 +79,7 @@ impl LockedSwap {
 
 /* ------------------------ Basic utils functions ------------------------ */
 
-fn create_related_account<'a, 'b>(
+pub fn create_related_account<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
     map_account: &'a AccountInfo<'b>,
@@ -121,7 +122,7 @@ fn create_related_account<'a, 'b>(
     Ok(())
 }
 
-fn write_related_account<'a, 'b>(
+pub fn write_related_account<'a, 'b>(
     map_account: &'a AccountInfo<'b>,
     content: &[u8],
 ) -> ProgramResult {
@@ -220,13 +221,30 @@ fn check_lockedswap_directly<'a, 'b>(
     check_pda_match(save_si_account_input, save_si_pubkey_expected)
 }
 
+pub fn check_balance_account_directly<'a, 'b>(
+    program_id: &Pubkey,
+    pool_index: u64,
+    coin_index: u8,
+    save_balance_account_input: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    let (save_balance_pubkey_expected, _) = Pubkey::find_program_address(
+        &[
+            ConstantValue::SAVE_BALANCE_PHRASE,
+            &pool_index.to_be_bytes(),
+            &[coin_index],
+        ],
+        program_id,
+    );
+    check_pda_match(save_balance_account_input, save_balance_pubkey_expected)
+}
+
 /* ------------------------ Admin functions ------------------------ */
 
 pub fn init_contract<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
     system_program: &'a AccountInfo<'b>,
-    save_map_token_account: &'a AccountInfo<'b>,
+    save_token_list_account: &'a AccountInfo<'b>,
     authority_account: &'a AccountInfo<'b>,
     save_poaa_account_input_admin: &'a AccountInfo<'b>,
     save_oop_account_input_admin: &'a AccountInfo<'b>,
@@ -244,7 +262,7 @@ pub fn init_contract<'a, 'b>(
     create_related_account(
         program_id,
         payer_account,
-        save_map_token_account,
+        save_token_list_account,
         system_program,
         ConstantValue::SUPPORT_COINS_PHRASE,
         b"",
@@ -284,15 +302,15 @@ pub fn add_support_token<'a, 'b>(
     program_id: &Pubkey,
     admin_account: &'a AccountInfo<'b>,
     authority_account: &'a AccountInfo<'b>,
-    save_map_token_account: &'a AccountInfo<'b>,
+    save_token_list_account: &'a AccountInfo<'b>,
     token_mint_account: &'a AccountInfo<'b>,
     coin_index: u8,
 ) -> ProgramResult {
     check_admin(program_id, admin_account, authority_account)?;
-    let mut save_map_token_account_data = save_map_token_account.data.borrow_mut();
+    let mut save_token_list_account_data = save_token_list_account.data.borrow_mut();
     let start_u8_index = coin_index as usize * 32;
     for i in 0..32 {
-        save_map_token_account_data[start_u8_index + i] = token_mint_account.key.as_ref()[i]
+        save_token_list_account_data[start_u8_index + i] = token_mint_account.key.as_ref()[i]
     }
     Ok(())
 }
@@ -300,22 +318,26 @@ pub fn add_support_token<'a, 'b>(
 /* ------------------------ LP pools functions ------------------------ */
 
 pub fn token_mint_account_for_index<'a, 'b>(
-    save_map_token_account: &'a AccountInfo<'b>,
+    save_token_list_account: &'a AccountInfo<'b>,
     coin_index: u8,
 ) -> Pubkey {
-    let save_map_token_account_data = save_map_token_account.data.borrow();
+    let save_token_list_account_data = save_token_list_account.data.borrow();
     let start_u8_index = coin_index as usize * 32;
-    Pubkey::from(*array_ref![save_map_token_account_data, start_u8_index, 32])
+    Pubkey::from(*array_ref![
+        save_token_list_account_data,
+        start_u8_index,
+        32
+    ])
 }
 
 // Original `match_coin_type`
 pub fn match_token_address<'a, 'b>(
-    save_map_token_account: &'a AccountInfo<'b>,
+    save_token_list_account: &'a AccountInfo<'b>,
     token_mint_account: &'a AccountInfo<'b>,
     coin_index: u8,
 ) -> ProgramResult {
     let token_addr_1 = *token_mint_account.key;
-    let token_addr_2 = token_mint_account_for_index(save_map_token_account, coin_index);
+    let token_addr_2 = token_mint_account_for_index(save_token_list_account, coin_index);
     if token_addr_1 != token_addr_2 {
         Err(MesonError::CoinTypeMismatch.into())
     } else {
@@ -359,6 +381,25 @@ pub fn pool_index_of<'a, 'b>(
 
     let account_data = save_poaa_account_input.data.borrow();
     Ok(u64::from_be_bytes(*array_ref![account_data, 0, 8]))
+}
+
+pub fn match_pool_index<'a, 'b>(
+    program_id: &Pubkey,
+    pool_index: u64,
+    authorized_account_input: &'a AccountInfo<'b>,
+    save_poaa_account_input: &'a AccountInfo<'b>,
+) -> ProgramResult {
+    if pool_index
+        != pool_index_of(
+            program_id,
+            authorized_account_input,
+            save_poaa_account_input,
+        )?
+    {
+        Err(MesonError::PoolIndexMismatch.into())
+    } else {
+        Ok(())
+    }
 }
 
 pub fn pool_index_if_owner<'a, 'b>(
@@ -573,7 +614,7 @@ pub fn remove_posted_swap<'a, 'b>(
     {
         let ps_data = save_ps_account_input.data.borrow();
         posted_origin = PostedSwap::unpack(*array_ref![ps_data, 0, 60]);
-    }   // See the annotation in `bond_posted_swap` function.
+    } // See the annotation in `bond_posted_swap` function.
     if posted_origin.from_address == Pubkey::from([0; 32]) {
         return Err(MesonError::SwapNotExists.into());
     }
@@ -642,7 +683,7 @@ pub fn remove_locked_swap<'a, 'b>(
     {
         let ls_data = save_si_account_input.data.borrow();
         locked_origin = LockedSwap::unpack(*array_ref![ls_data, 0, 48]);
-    }   // See the annotation in `bond_posted_swap` function.
+    } // See the annotation in `bond_posted_swap` function.
     if locked_origin.until == 0 {
         return Err(MesonError::SwapNotExists.into());
     }

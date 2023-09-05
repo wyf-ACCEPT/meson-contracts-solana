@@ -20,25 +20,18 @@ pub fn post_swap<'a, 'b>(
     user_account: &'a AccountInfo<'b>,
     token_mint_account: &'a AccountInfo<'b>,
     token_program_info: &'a AccountInfo<'b>,
-    save_map_token_account: &'a AccountInfo<'b>,
+    save_token_list_account: &'a AccountInfo<'b>,
     save_ps_account_input: &'a AccountInfo<'b>,
     ta_user_input: &'a AccountInfo<'b>,
     ta_program_input: &'a AccountInfo<'b>,
-    contract_signer_account_input: &'a AccountInfo<'b>,
     encoded_swap: [u8; 32],
     signature: [u8; 64],
     initiator: [u8; 20],
     pool_index: u64,
 ) -> ProgramResult {
-    let (expected_contract_signer, bump_seed) =
-        Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], program_id);
-    if expected_contract_signer != *contract_signer_account_input.key {
-        return Err(MesonError::PdaAccountMismatch.into());
-    }
-
     Utils::for_initial_chain(encoded_swap)?;
     state::match_token_address(
-        save_map_token_account,
+        save_token_list_account,
         token_mint_account,
         Utils::in_coin_index_from(encoded_swap),
     )?;
@@ -89,7 +82,7 @@ pub fn post_swap<'a, 'b>(
             ta_program_input.clone(),
             user_account.clone(),
         ],
-        &[&[ConstantValue::CONTRACT_SIGNER, &[bump_seed]]],
+        &[],
     )?;
 
     Ok(())

@@ -7,6 +7,7 @@ use solana_program::{
 // use crate::state::{create_related_account, write_related_account};
 use crate::{
     instruction::MesonInstruction,
+    mesonpools::deposit_to_pool,
     mesonswap::{bond_swap, cancel_swap, execute_swap, post_swap},
     state::{add_support_token, init_contract, register_pool_index, transfer_admin},
 };
@@ -53,6 +54,13 @@ impl Processor {
             } => {
                 Self::process_execute_swap(program_id, accounts, encoded_swap, signature, recipient)
             }
+            MesonInstruction::DepositToPool {
+                pool_index,
+                coin_index,
+                amount,
+            } => {
+                Self::process_deposit_to_pool(program_id, accounts, pool_index, coin_index, amount)
+            }
         }
     }
 
@@ -62,7 +70,7 @@ impl Processor {
         let payer_account = next_account_info(account_info_iter)?;
         let system_program = next_account_info(account_info_iter)?;
         let authority_account = next_account_info(account_info_iter)?;
-        let map_token_account = next_account_info(account_info_iter)?;
+        let save_token_list_account = next_account_info(account_info_iter)?;
         let save_poaa_account_input_admin = next_account_info(account_info_iter)?;
         let save_oop_account_input_admin = next_account_info(account_info_iter)?;
 
@@ -70,7 +78,7 @@ impl Processor {
             program_id,
             payer_account,
             system_program,
-            map_token_account,
+            save_token_list_account,
             authority_account,
             save_poaa_account_input_admin,
             save_oop_account_input_admin,
@@ -96,14 +104,14 @@ impl Processor {
 
         let admin_account = next_account_info(account_info_iter)?;
         let authority_account = next_account_info(account_info_iter)?;
-        let map_token_account = next_account_info(account_info_iter)?;
+        let save_token_list_account = next_account_info(account_info_iter)?;
         let token_mint_account = next_account_info(account_info_iter)?;
 
         add_support_token(
             program_id,
             admin_account,
             authority_account,
-            map_token_account,
+            save_token_list_account,
             token_mint_account,
             coin_index,
         )
@@ -148,11 +156,10 @@ impl Processor {
         let user_account = next_account_info(account_info_iter)?;
         let token_mint_account = next_account_info(account_info_iter)?;
         let token_program_info = next_account_info(account_info_iter)?;
-        let save_map_token_account = next_account_info(account_info_iter)?;
+        let save_token_list_account = next_account_info(account_info_iter)?;
         let save_ps_account_input = next_account_info(account_info_iter)?;
         let ta_user_input = next_account_info(account_info_iter)?;
         let ta_program_input = next_account_info(account_info_iter)?;
-        let contract_signer_account_input = next_account_info(account_info_iter)?;
 
         post_swap(
             program_id,
@@ -161,11 +168,10 @@ impl Processor {
             user_account,
             token_mint_account,
             token_program_info,
-            save_map_token_account,
+            save_token_list_account,
             save_ps_account_input,
             ta_user_input,
             ta_program_input,
-            contract_signer_account_input,
             encoded_swap,
             signature,
             initiator,
@@ -250,6 +256,44 @@ impl Processor {
             encoded_swap,
             signature,
             recipient,
+        )
+    }
+
+    fn process_deposit_to_pool(
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+        pool_index: u64,
+        coin_index: u8,
+        amount: u64,
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        let payer_account = next_account_info(account_info_iter)?;
+        let system_program = next_account_info(account_info_iter)?;
+        let authorized_account_input = next_account_info(account_info_iter)?;
+        let token_mint_account = next_account_info(account_info_iter)?;
+        let token_program_info = next_account_info(account_info_iter)?;
+        let save_token_list_account = next_account_info(account_info_iter)?;
+        let save_poaa_account_input = next_account_info(account_info_iter)?;
+        let save_balance_account_input = next_account_info(account_info_iter)?;
+        let ta_lp_input = next_account_info(account_info_iter)?;
+        let ta_program_input = next_account_info(account_info_iter)?;
+
+        deposit_to_pool(
+            program_id,
+            payer_account,
+            system_program,
+            authorized_account_input,
+            token_mint_account,
+            token_program_info,
+            save_token_list_account,
+            save_poaa_account_input,
+            save_balance_account_input,
+            ta_lp_input,
+            ta_program_input,
+            pool_index,
+            coin_index,
+            amount,
         )
     }
 }

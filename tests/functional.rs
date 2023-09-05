@@ -533,7 +533,6 @@ async fn test_all() {
                 AccountMeta::new(save_ps_pubkey, false),
                 AccountMeta::new(ta_bob.pubkey(), false),
                 AccountMeta::new(ta_program.pubkey(), false),
-                AccountMeta::new(contract_signer_pubkey, false),
             ],
         )],
         Some(&payer.pubkey()),

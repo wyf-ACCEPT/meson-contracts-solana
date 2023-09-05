@@ -9,7 +9,7 @@ pub enum MesonInstruction {
     /// 0. payer_account: the contract deployer, also the admin
     /// 1. system_program: that is `11111111111111111111111111111111`
     /// 2. authority_account: to save the address of admin
-    /// 3. map_token_account: to save the supported coin list
+    /// 3. save_token_list_account: to save the supported coin list
     InitContract,
 
     /// [1]
@@ -21,7 +21,7 @@ pub enum MesonInstruction {
     /// [2]
     /// 0. admin_account
     /// 1. authority_account
-    /// 2. map_token_account
+    /// 2. save_token_list_account
     /// 3. token_mint_account: the mint address of the coin to add to support list
     AddSupportToken { coin_index: u8 },
 
@@ -39,11 +39,10 @@ pub enum MesonInstruction {
     /// 2. user_account: the user who wants to swap
     /// 3. token_mint_account
     /// 4. token_program_info: that is "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-    /// 5. save_map_token_account: same as `map_token_account`
+    /// 5. save_token_list_account
     /// 6. save_ps_account_input: the data account to save `encoded -> postedSwap` pair (60-bytes)
     /// 7. ta_user_input: the token account for the user
     /// 8. ta_program_input: the token account for the program
-    /// 9. contract_signer_account_input: the account as a singer of the program contract
     PostSwap {
         encoded_swap: [u8; 32],
         signature: [u8; 64],
@@ -76,11 +75,28 @@ pub enum MesonInstruction {
     /// 3. save_oop_account_input
     /// 4. ta_lp_input: the token account for lp (the owner of pool_index)
     /// 5. ta_program_input
-    /// 6. contract_signer_account_input
+    /// 6. contract_signer_account_input: the account as a singer of the program contract
     ExecuteSwap {
         encoded_swap: [u8; 32],
         signature: [u8; 64],
         recipient: [u8; 20],
+    },
+
+    /// [8]
+    /// 0. payer_account
+    /// 1. system_program
+    /// 2. authorized_account_input: the address to add to LP pools
+    /// 3. token_mint_account
+    /// 4. token_program_info
+    /// 5. save_token_list_account
+    /// 6. save_poaa_account_input
+    /// 7. save_balance_account_input: the data account to save `pool_index & coin_index -> balance` pair (8-bytes long to save u64 balance)
+    /// 8. ta_lp_input
+    /// 9. ta_program_input
+    DepositToPool {
+        pool_index: u64,
+        coin_index: u8,
+        amount: u64,
     },
 }
 
@@ -135,6 +151,16 @@ impl MesonInstruction {
                     encoded_swap: *encoded_swap_ref,
                     signature: *signature_ref,
                     recipient: *recipient_ref,
+                }
+            }
+
+            8 => {
+                let rest_fix = *array_ref![rest, 0, 17];
+                let (pool_index_ref, coin_index_ref, amount_ref) = array_refs![&rest_fix, 8, 1, 8];
+                MesonInstruction::DepositToPool {
+                    pool_index: u64::from_be_bytes(*pool_index_ref),
+                    coin_index: coin_index_ref[0],
+                    amount: u64::from_be_bytes(*amount_ref),
                 }
             }
 
