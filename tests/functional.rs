@@ -669,4 +669,168 @@ async fn test_all() {
         "execute-swap",
     )
     .await;
+
+    // =====================================================================
+    // =                                                                   =
+    // =                  LP Deposit & Withdraw assets                     =
+    // =                                                                   =
+    // =====================================================================
+    println!("\n================== Deposit assets to pool ==================");
+
+    let coin_index = 0;
+    let deposit_amount: u64 = 170_000_000;
+    let (save_balance_pubkey_alice, _) = Pubkey::find_program_address(
+        &[
+            ConstantValue::SAVE_BALANCE_PHRASE,
+            &alice_pool_index.to_be_bytes(),
+            &[coin_index],
+        ],
+        &program_id,
+    );
+
+    let mut data_input_array = [8 as u8; 18];
+    data_input_array[1..9].copy_from_slice(&alice_pool_index.to_be_bytes());
+    data_input_array[9] = coin_index;
+    data_input_array[10..18].copy_from_slice(&deposit_amount.to_be_bytes());
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[Instruction::new_with_bincode(
+            program_id,
+            &data_input_array,
+            vec![
+                AccountMeta::new(payer_pubkey, true),
+                AccountMeta::new(system_program::id(), false),
+                AccountMeta::new(alice.pubkey(), true),
+                AccountMeta::new(mint_pubkey, false),
+                AccountMeta::new(spl_token::id(), false),
+                AccountMeta::new(token_list_pda, false),
+                AccountMeta::new(save_poaa_pubkey_alice, false),
+                AccountMeta::new(save_balance_pubkey_alice, false),
+                AccountMeta::new(ta_alice.pubkey(), false),
+                AccountMeta::new(ta_program.pubkey(), false),
+            ],
+        )],
+        Some(&alice.pubkey()),
+        &[&payer, &alice],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+
+    let pool_info = get_account_info(&mut banks_client, save_oop_pubkey_alice).await;
+    println!(
+        "Owner of pool {}           : {}",
+        alice_pool_index,
+        Pubkey::from(*array_ref![pool_info.data(), 0, 32])
+    );
+    let balance_info = get_account_info(&mut banks_client, save_balance_pubkey_alice).await;
+    println!(
+        "Balance for coin {}, pool {}: {}",
+        coin_index,
+        alice_pool_index,
+        u64::from_be_bytes(*array_ref![balance_info.data(), 0, 8])
+    );
+
+    println!("\n================== Deposit again ==================");
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[Instruction::new_with_bincode(
+            program_id,
+            &data_input_array,
+            vec![
+                AccountMeta::new(payer_pubkey, true),
+                AccountMeta::new(system_program::id(), false),
+                AccountMeta::new(alice.pubkey(), true),
+                AccountMeta::new(mint_pubkey, false),
+                AccountMeta::new(spl_token::id(), false),
+                AccountMeta::new(token_list_pda, false),
+                AccountMeta::new(save_poaa_pubkey_alice, false),
+                AccountMeta::new(save_balance_pubkey_alice, false),
+                AccountMeta::new(ta_alice.pubkey(), false),
+                AccountMeta::new(ta_program.pubkey(), false),
+            ],
+        )],
+        Some(&alice.pubkey()),
+        &[&payer, &alice],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+
+    let pool_info = get_account_info(&mut banks_client, save_oop_pubkey_alice).await;
+    println!(
+        "Owner of pool {}           : {}",
+        alice_pool_index,
+        Pubkey::from(*array_ref![pool_info.data(), 0, 32])
+    );
+    let balance_info = get_account_info(&mut banks_client, save_balance_pubkey_alice).await;
+    println!(
+        "Balance for coin {}, pool {}: {}",
+        coin_index,
+        alice_pool_index,
+        u64::from_be_bytes(*array_ref![balance_info.data(), 0, 8])
+    );
+    show_usdc_balance_all(
+        &mut banks_client,
+        &ta_program,
+        &ta_alice,
+        &ta_bob,
+        &program_id,
+        &alice,
+        &bob,
+        "deposit",
+    ).await;
+
+    println!("\n================== Withdraw assets from pool ==================");
+
+    let withdraw_amount: u64 = 300_000_000;
+    data_input_array[0] = 9;
+    data_input_array[10..18].copy_from_slice(&withdraw_amount.to_be_bytes());
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[Instruction::new_with_bincode(
+            program_id,
+            &data_input_array,
+            vec![
+                AccountMeta::new(alice.pubkey(), true),
+                AccountMeta::new(mint_pubkey, false),
+                AccountMeta::new(spl_token::id(), false),
+                AccountMeta::new(token_list_pda, false),
+                AccountMeta::new(save_poaa_pubkey_alice, false),
+                AccountMeta::new(save_balance_pubkey_alice, false),
+                AccountMeta::new(ta_alice.pubkey(), false),
+                AccountMeta::new(ta_program.pubkey(), false),
+                AccountMeta::new(contract_signer_pubkey, false),
+            ],
+        )],
+        Some(&payer.pubkey()),
+        &[&payer, &alice],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+
+    let pool_info = get_account_info(&mut banks_client, save_oop_pubkey_alice).await;
+    println!(
+        "Owner of pool {}           : {}",
+        alice_pool_index,
+        Pubkey::from(*array_ref![pool_info.data(), 0, 32])
+    );
+    let balance_info = get_account_info(&mut banks_client, save_balance_pubkey_alice).await;
+    println!(
+        "Balance for coin {}, pool {}: {}",
+        coin_index,
+        alice_pool_index,
+        u64::from_be_bytes(*array_ref![balance_info.data(), 0, 8])
+    );
+    show_usdc_balance_all(
+        &mut banks_client,
+        &ta_program,
+        &ta_alice,
+        &ta_bob,
+        &program_id,
+        &alice,
+        &bob,
+        "deposit",
+    ).await;
 }

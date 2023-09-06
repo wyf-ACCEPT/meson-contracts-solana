@@ -7,7 +7,7 @@ use solana_program::{
 // use crate::state::{create_related_account, write_related_account};
 use crate::{
     instruction::MesonInstruction,
-    mesonpools::deposit_to_pool,
+    mesonpools::{deposit_to_pool, withdraw_from_pool},
     mesonswap::{bond_swap, cancel_swap, execute_swap, post_swap},
     state::{add_support_token, init_contract, register_pool_index, transfer_admin},
 };
@@ -61,6 +61,13 @@ impl Processor {
             } => {
                 Self::process_deposit_to_pool(program_id, accounts, pool_index, coin_index, amount)
             }
+            MesonInstruction::WithdrawFromPool {
+                pool_index,
+                coin_index,
+                amount,
+            } => Self::process_withdraw_from_pool(
+                program_id, accounts, pool_index, coin_index, amount,
+            ),
         }
     }
 
@@ -291,6 +298,42 @@ impl Processor {
             save_balance_account_input,
             ta_lp_input,
             ta_program_input,
+            pool_index,
+            coin_index,
+            amount,
+        )
+    }
+
+    fn process_withdraw_from_pool(
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+        pool_index: u64,
+        coin_index: u8,
+        amount: u64,
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        let authorized_account_input = next_account_info(account_info_iter)?;
+        let token_mint_account = next_account_info(account_info_iter)?;
+        let token_program_info = next_account_info(account_info_iter)?;
+        let save_token_list_account = next_account_info(account_info_iter)?;
+        let save_poaa_account_input = next_account_info(account_info_iter)?;
+        let save_balance_account_input = next_account_info(account_info_iter)?;
+        let ta_lp_input = next_account_info(account_info_iter)?;
+        let ta_program_input = next_account_info(account_info_iter)?;
+        let contract_signer_account_input = next_account_info(account_info_iter)?;
+
+        withdraw_from_pool(
+            program_id,
+            authorized_account_input,
+            token_mint_account,
+            token_program_info,
+            save_token_list_account,
+            save_poaa_account_input,
+            save_balance_account_input,
+            ta_lp_input,
+            ta_program_input,
+            contract_signer_account_input,
             pool_index,
             coin_index,
             amount,

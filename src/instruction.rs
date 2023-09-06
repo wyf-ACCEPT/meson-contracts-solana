@@ -98,6 +98,22 @@ pub enum MesonInstruction {
         coin_index: u8,
         amount: u64,
     },
+
+    /// [9]
+    /// 0. authorized_account_input
+    /// 1. token_mint_account
+    /// 2. token_program_info
+    /// 3. save_token_list_account
+    /// 4. save_poaa_account_input
+    /// 5. save_balance_account_input
+    /// 6. ta_lp_input
+    /// 7. ta_program_input
+    /// 8. contract_signer_account_input
+    WithdrawFromPool {
+        pool_index: u64,
+        coin_index: u8,
+        amount: u64,
+    },
 }
 
 impl MesonInstruction {
@@ -158,6 +174,16 @@ impl MesonInstruction {
                 let rest_fix = *array_ref![rest, 0, 17];
                 let (pool_index_ref, coin_index_ref, amount_ref) = array_refs![&rest_fix, 8, 1, 8];
                 MesonInstruction::DepositToPool {
+                    pool_index: u64::from_be_bytes(*pool_index_ref),
+                    coin_index: coin_index_ref[0],
+                    amount: u64::from_be_bytes(*amount_ref),
+                }
+            }
+
+            9 => {
+                let rest_fix = *array_ref![rest, 0, 17];
+                let (pool_index_ref, coin_index_ref, amount_ref) = array_refs![&rest_fix, 8, 1, 8];
+                MesonInstruction::WithdrawFromPool {
                     pool_index: u64::from_be_bytes(*pool_index_ref),
                     coin_index: coin_index_ref[0],
                     amount: u64::from_be_bytes(*amount_ref),

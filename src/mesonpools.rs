@@ -70,7 +70,9 @@ pub fn deposit_to_pool<'a, 'b>(
         coin_index,
         save_balance_account_input,
     )?;
-    if !save_balance_account_input.data_is_empty() {
+
+    // First time to deposit -- register a data account to save the balance
+    if save_balance_account_input.data_len() == 0 {
         let mut pool_coin_array = [0; 9];
         pool_coin_array[0..8].copy_from_slice(&pool_index.to_be_bytes());
         pool_coin_array[8] = coin_index;
@@ -87,8 +89,11 @@ pub fn deposit_to_pool<'a, 'b>(
     }
 
     // Update balance
-    let balance_data = save_balance_account_input.data.borrow();
-    let balance_amount = u64::from_be_bytes(*array_ref![balance_data, 0, 8]);
+    let balance_amount;
+    {
+        let balance_data = save_balance_account_input.data.borrow();
+        balance_amount = u64::from_be_bytes(*array_ref![balance_data, 0, 8]);
+    }   // See the annotation of `bond_posted_swap` for explanation of these code
     write_related_account(
         save_balance_account_input,
         &(balance_amount + amount).to_be_bytes(),
@@ -97,25 +102,72 @@ pub fn deposit_to_pool<'a, 'b>(
     Ok(())
 }
 
-// pub fn withdraw<'a, 'b>(
-//     program_id: &Pubkey,
-//     payer_account: &'a AccountInfo<'b>,
-//     system_program: &'a AccountInfo<'b>,
-//     authorized_account_input: &'a AccountInfo<'b>,
-//     token_mint_account: &'a AccountInfo<'b>,
-//     token_program_info: &'a AccountInfo<'b>,
-//     save_token_list_account: &'a AccountInfo<'b>,
-//     save_poaa_account_input: &'a AccountInfo<'b>,
-//     save_oop_account_input: &'a AccountInfo<'b>,
-//     save_balance_account_input: &'a AccountInfo<'b>,
-//     ta_lp_input: &'a AccountInfo<'b>,
-//     ta_program_input: &'a AccountInfo<'b>,
-//     pool_index: u64,
-//     coin_index: u8,
-//     amount: u64,
-// ) -> ProgramResult {
+pub fn withdraw_from_pool<'a, 'b>(
+    program_id: &Pubkey,
+    authorized_account_input: &'a AccountInfo<'b>,
+    token_mint_account: &'a AccountInfo<'b>,
+    token_program_info: &'a AccountInfo<'b>,
+    save_token_list_account: &'a AccountInfo<'b>,
+    save_poaa_account_input: &'a AccountInfo<'b>,
+    save_balance_account_input: &'a AccountInfo<'b>,
+    ta_lp_input: &'a AccountInfo<'b>,
+    ta_program_input: &'a AccountInfo<'b>,
+    contract_signer_account_input: &'a AccountInfo<'b>,
+    pool_index: u64,
+    coin_index: u8,
+    amount: u64,
+) -> ProgramResult {
+    // Check token address, pool index and contract signer account input
+    state::match_pool_index(
+        program_id,
+        pool_index,
+        authorized_account_input,
+        save_poaa_account_input,
+    )?;
+    state::match_token_address(save_token_list_account, token_mint_account, coin_index)?;
+    let (expected_contract_signer, bump_seed) =
+        Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], program_id);
+    if expected_contract_signer != *contract_signer_account_input.key {
+        return Err(MesonError::PdaAccountMismatch.into());
+    }
 
-// }
+    // Withdraw token from the contract
+    let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
+    invoke_signed(
+        &transfer_checked(
+            token_program_info.key,
+            ta_program_input.key,
+            token_mint_account.key,
+            ta_lp_input.key,
+            &expected_contract_signer,
+            &[],
+            amount,
+            decimals,
+        )
+        .unwrap(),
+        &[
+            ta_program_input.clone(),
+            token_mint_account.clone(),
+            ta_lp_input.clone(),
+            contract_signer_account_input.clone(),
+        ],
+        &[&[ConstantValue::CONTRACT_SIGNER, &[bump_seed]]],
+    )?;
+
+    // Update balance
+    let balance_amount;
+    {
+        let balance_data = save_balance_account_input.data.borrow();
+        balance_amount = u64::from_be_bytes(*array_ref![balance_data, 0, 8]);
+    }   // See the annotation of `bond_posted_swap` for explanation of these code
+    
+    write_related_account(
+        save_balance_account_input,
+        &(balance_amount - amount).to_be_bytes(),
+    )?;
+
+    Ok(())
+}
 
 // // Named consistently with solidity contracts
 // public entry fun withdraw<CoinType>(sender: &signer, amount: u64, pool_index: u64) {
