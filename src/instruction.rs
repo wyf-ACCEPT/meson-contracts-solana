@@ -90,7 +90,7 @@ pub enum MesonInstruction {
     /// 4. token_program_info
     /// 5. save_token_list_account
     /// 6. save_poaa_account_input
-    /// 7. save_balance_account_input: the data account to save `pool_index & coin_index -> balance` pair (8-bytes long to save u64 balance)
+    /// 7. save_balance_lp_account_input: the data account to save `pool_index & coin_index -> balance` pair (8-bytes long to save u64 balance)
     /// 8. ta_lp_input
     /// 9. ta_program_input
     DepositToPool {
@@ -105,7 +105,7 @@ pub enum MesonInstruction {
     /// 2. token_program_info
     /// 3. save_token_list_account
     /// 4. save_poaa_account_input
-    /// 5. save_balance_account_input
+    /// 5. save_balance_lp_account_input
     /// 6. ta_lp_input
     /// 7. ta_program_input
     /// 8. contract_signer_account_input

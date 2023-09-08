@@ -100,6 +100,22 @@ pub enum MesonError {
     // 23
     #[error("Token account information mismatch!")]
     TokenAccountMismatch,
+
+    // 24
+    #[error("Swap expire timestamp is too soon!")]
+    SwapExpireTsIsSoon,
+
+    // 25
+    #[error("Pool balance not enough!")]
+    PoolBalanceNotEnough,
+
+    // 26
+    #[error("Swap still in lock period!")]
+    SwapStillInLock,
+
+    // 27
+    #[error("Swap passed lock period!")]
+    SwapPassedLockPeriod,
 }
 
 impl From<MesonError> for ProgramError {

@@ -115,6 +115,7 @@ pub fn cancel_swap<'a, 'b>(
     contract_signer_account_input: &'a AccountInfo<'b>,
     encoded_swap: [u8; 32],
 ) -> ProgramResult {
+    let amount = Utils::amount_from(encoded_swap);
     let clock = Clock::get()?;
     let now_timestamp = clock.unix_timestamp.to_le() as u64;
     let expire_ts = Utils::expire_ts_from(encoded_swap);
@@ -122,20 +123,19 @@ pub fn cancel_swap<'a, 'b>(
         return Err(MesonError::SwapCannotCancelBeforeExpire.into());
     }
 
-    let (expected_contract_signer, bump_seed) =
-        Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], program_id);
-    if expected_contract_signer != *contract_signer_account_input.key {
-        return Err(MesonError::PdaAccountMismatch.into());
-    }
     let posted = state::remove_posted_swap(program_id, encoded_swap, save_ps_account_input)?;
 
     let user_pubkey_expected = TokenAccount::unpack(&ta_user_input.data.borrow())?.owner;
     if posted.from_address != user_pubkey_expected {
         return Err(MesonError::TokenAccountMismatch.into());
     }
-    let amount = Utils::amount_from(encoded_swap);
-    let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
 
+    let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
+    let (expected_contract_signer, bump_seed) =
+        Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], program_id);
+    if expected_contract_signer != *contract_signer_account_input.key {
+        return Err(MesonError::PdaAccountMismatch.into());
+    }
     invoke_signed(
         &transfer_checked(
             token_program_info.key,
@@ -173,18 +173,11 @@ pub fn execute_swap<'a, 'b>(
     recipient: [u8; 20],
     // deposit_to_pool: todo(), default false
 ) -> ProgramResult {
-    let (expected_contract_signer, bump_seed) =
-        Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], program_id);
-    if expected_contract_signer != *contract_signer_account_input.key {
-        return Err(MesonError::PdaAccountMismatch.into());
-    }
-
     let PostedSwap {
         pool_index,
         initiator,
         from_address: _,
     } = state::remove_posted_swap(program_id, encoded_swap, save_ps_account_input)?;
-
     if pool_index == 0 {
         return Err(MesonError::PoolIndexCannotBeZero.into());
     }
@@ -199,9 +192,14 @@ pub fn execute_swap<'a, 'b>(
     if lp_pubkey != lp_pubkey_expected {
         return Err(MesonError::TokenAccountMismatch.into());
     }
-    let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
     let amount = Utils::amount_from(encoded_swap);
 
+    let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
+    let (expected_contract_signer, bump_seed) =
+        Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], program_id);
+    if expected_contract_signer != *contract_signer_account_input.key {
+        return Err(MesonError::PdaAccountMismatch.into());
+    }
     invoke_signed(
         &transfer_checked(
             token_program_info.key,

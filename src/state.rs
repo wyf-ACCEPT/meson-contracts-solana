@@ -225,7 +225,7 @@ pub fn check_balance_account_directly<'a, 'b>(
     program_id: &Pubkey,
     pool_index: u64,
     coin_index: u8,
-    save_balance_account_input: &'a AccountInfo<'b>,
+    save_balance_lp_account_input: &'a AccountInfo<'b>,
 ) -> ProgramResult {
     let (save_balance_pubkey_expected, _) = Pubkey::find_program_address(
         &[
@@ -235,7 +235,7 @@ pub fn check_balance_account_directly<'a, 'b>(
         ],
         program_id,
     );
-    check_pda_match(save_balance_account_input, save_balance_pubkey_expected)
+    check_pda_match(save_balance_lp_account_input, save_balance_pubkey_expected)
 }
 
 /* ------------------------ Admin functions ------------------------ */

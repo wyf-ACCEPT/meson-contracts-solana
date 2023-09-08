@@ -282,7 +282,7 @@ impl Processor {
         let token_program_info = next_account_info(account_info_iter)?;
         let save_token_list_account = next_account_info(account_info_iter)?;
         let save_poaa_account_input = next_account_info(account_info_iter)?;
-        let save_balance_account_input = next_account_info(account_info_iter)?;
+        let save_balance_lp_account_input = next_account_info(account_info_iter)?;
         let ta_lp_input = next_account_info(account_info_iter)?;
         let ta_program_input = next_account_info(account_info_iter)?;
 
@@ -295,7 +295,7 @@ impl Processor {
             token_program_info,
             save_token_list_account,
             save_poaa_account_input,
-            save_balance_account_input,
+            save_balance_lp_account_input,
             ta_lp_input,
             ta_program_input,
             pool_index,
@@ -318,7 +318,7 @@ impl Processor {
         let token_program_info = next_account_info(account_info_iter)?;
         let save_token_list_account = next_account_info(account_info_iter)?;
         let save_poaa_account_input = next_account_info(account_info_iter)?;
-        let save_balance_account_input = next_account_info(account_info_iter)?;
+        let save_balance_lp_account_input = next_account_info(account_info_iter)?;
         let ta_lp_input = next_account_info(account_info_iter)?;
         let ta_program_input = next_account_info(account_info_iter)?;
         let contract_signer_account_input = next_account_info(account_info_iter)?;
@@ -330,7 +330,7 @@ impl Processor {
             token_program_info,
             save_token_list_account,
             save_poaa_account_input,
-            save_balance_account_input,
+            save_balance_lp_account_input,
             ta_lp_input,
             ta_program_input,
             contract_signer_account_input,
