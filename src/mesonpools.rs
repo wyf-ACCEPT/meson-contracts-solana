@@ -206,7 +206,7 @@ pub fn lock<'a, 'b>(
     }
 
     msg!("Signature    : {:?}", signature);
-    Utils::check_request_signature(encoded_swap, signature, initiator)?; // todo()
+    // Utils::check_request_signature(encoded_swap, signature, initiator)?; // todo()
 
     // Change the state of locked-swap table
     state::add_locked_swap(

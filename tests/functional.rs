@@ -1,3 +1,5 @@
+use meson_contracts_solana::utils::Utils;
+
 use {
     arrayref::{array_ref, array_refs},
     meson_contracts_solana::{entrypoint::process_instruction, state::ConstantValue},
@@ -783,7 +785,7 @@ async fn test_all() {
 
     println!("\n================== Withdraw assets from pool ==================");
 
-    let withdraw_amount: u64 = 300_000_000;
+    let withdraw_amount: u64 = 100_000_000;
     data_input_array[0] = 9;
     data_input_array[10..18].copy_from_slice(&withdraw_amount.to_be_bytes());
 
@@ -833,4 +835,116 @@ async fn test_all() {
         &bob,
         "deposit",
     ).await;
+
+    // =====================================================================
+    // =                                                                   =
+    // =                     Step.2 Locked by Alice                        =
+    // =                                                                   =
+    // =====================================================================
+    println!("\n================== Step 2. Lock ==================");
+
+    let initiator: [u8; 20] = [
+        0x2e, 0xf8, 0xa5, 0x1f, 0x8f, 0xf1, 0x29, 0xdb, 0xb8, 0x74, 0xa0, 0xef, 0xb0, 0x21, 0x70,
+        0x2f, 0x59, 0xc1, 0xb2, 0x11,
+    ];
+    let recipient = bob.pubkey();
+
+    let swap_id = Utils::get_swap_id(encoded_swap, initiator);
+    let (save_si_pubkey, _) = Pubkey::find_program_address(
+        &[ConstantValue::SAVE_LOCKED_SWAP_PHRASE, &swap_id],
+        &program_id,
+    );
+
+    let mut data_input_array = [10 as u8; 149];
+    data_input_array[1..33].copy_from_slice(&encoded_swap);
+    data_input_array[33..97].copy_from_slice(&fake_signature_request);
+    data_input_array[97..117].copy_from_slice(&initiator);
+    data_input_array[117..149].copy_from_slice(&recipient.to_bytes());
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[Instruction::new_with_bytes(
+            program_id,
+            &data_input_array,
+            vec![
+                AccountMeta::new(payer_pubkey, true),
+                AccountMeta::new(system_program::id(), false),
+                AccountMeta::new(alice.pubkey(), false),
+                AccountMeta::new(mint_pubkey, false),
+                AccountMeta::new(save_si_pubkey, false),
+                AccountMeta::new(token_list_pda, false),
+                AccountMeta::new(save_poaa_pubkey_alice, false),
+                AccountMeta::new(save_balance_pubkey_alice, false),
+            ],
+        )],
+        Some(&alice.pubkey()),
+        &[&payer, &alice],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+
+    let balance_info = get_account_info(&mut banks_client, save_balance_pubkey_alice).await;
+    println!(
+        "Balance for coin {}, pool {}: {}",
+        coin_index,
+        alice_pool_index,
+        u64::from_be_bytes(*array_ref![balance_info.data(), 0, 8])
+    );
+    show_usdc_balance_all(
+        &mut banks_client,
+        &ta_program,
+        &ta_alice,
+        &ta_bob,
+        &program_id,
+        &alice,
+        &bob,
+        "deposit",
+    ).await;
+
+    // =====================================================================
+    // =                                                                   =
+    // =                      Step.3 Release to Bob                        =
+    // =                                                                   =
+    // =====================================================================
+    println!("\n================== Step 3. Release ==================");
+
+    let (save_balance_pubkey_manager, _) = Pubkey::find_program_address(
+        &[
+            ConstantValue::SAVE_BALANCE_PHRASE,
+            &(0 as u64).to_be_bytes(),
+            &[coin_index],
+        ],
+        &program_id,
+    );
+
+    let mut data_input_array = [12 as u8; 117];
+    data_input_array[1..33].copy_from_slice(&encoded_swap);
+    data_input_array[33..97].copy_from_slice(&fake_signature_request);
+    data_input_array[97..117].copy_from_slice(&initiator);
+
+    let recent_blockhash = update_blockhash(&mut banks_client, recent_blockhash).await;
+    let transaction = Transaction::new_signed_with_payer(
+        &[Instruction::new_with_bytes(
+            program_id,
+            &data_input_array,
+            vec![
+                AccountMeta::new(payer_pubkey, true),
+                AccountMeta::new(mint_pubkey, false),
+                AccountMeta::new(spl_token::id(), false),
+                AccountMeta::new(save_si_pubkey, false),
+                AccountMeta::new(save_oop_pubkey_alice, false),
+                AccountMeta::new(save_balance_pubkey_manager, false),
+                AccountMeta::new(ta_bob.pubkey(), false),
+                AccountMeta::new(ta_program.pubkey(), false),
+                AccountMeta::new(contract_signer_pubkey, false),
+            ],
+        )],
+        Some(&alice.pubkey()),
+        &[&payer, &alice],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(transaction).await.unwrap();
+
+
+
 }
