@@ -7,7 +7,7 @@ use solana_program::{
 // use crate::state::{create_related_account, write_related_account};
 use crate::{
     instruction::MesonInstruction,
-    mesonpools::{deposit_to_pool, withdraw_from_pool},
+    mesonpools::{deposit_to_pool, lock, release, unlock, withdraw_from_pool},
     mesonswap::{bond_swap, cancel_swap, execute_swap, post_swap},
     state::{add_support_token, init_contract, register_pool_index, transfer_admin},
 };
@@ -68,6 +68,28 @@ impl Processor {
             } => Self::process_withdraw_from_pool(
                 program_id, accounts, pool_index, coin_index, amount,
             ),
+            MesonInstruction::Lock {
+                encoded_swap,
+                signature,
+                initiator,
+                recipient,
+            } => Self::process_lock(
+                program_id,
+                accounts,
+                encoded_swap,
+                signature,
+                initiator,
+                recipient,
+            ),
+            MesonInstruction::Unlock {
+                encoded_swap,
+                initiator,
+            } => Self::process_unlock(program_id, accounts, encoded_swap, initiator),
+            MesonInstruction::Release {
+                encoded_swap,
+                signature,
+                initiator,
+            } => Self::process_release(program_id, accounts, encoded_swap, signature, initiator),
         }
     }
 
@@ -337,6 +359,98 @@ impl Processor {
             pool_index,
             coin_index,
             amount,
+        )
+    }
+
+    fn process_lock(
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+        encoded_swap: [u8; 32],
+        signature: [u8; 64],
+        initiator: [u8; 20],
+        recipient: Pubkey,
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        let payer_account = next_account_info(account_info_iter)?;
+        let system_program = next_account_info(account_info_iter)?;
+        let authorized_account_input = next_account_info(account_info_iter)?;
+        let token_mint_account = next_account_info(account_info_iter)?;
+        let save_si_account_input = next_account_info(account_info_iter)?;
+        let save_token_list_account = next_account_info(account_info_iter)?;
+        let save_poaa_account_input = next_account_info(account_info_iter)?;
+        let save_balance_lp_account_input = next_account_info(account_info_iter)?;
+
+        lock(
+            program_id,
+            payer_account,
+            system_program,
+            authorized_account_input,
+            token_mint_account,
+            save_si_account_input,
+            save_token_list_account,
+            save_poaa_account_input,
+            save_balance_lp_account_input,
+            encoded_swap,
+            signature,
+            initiator,
+            recipient,
+        )
+    }
+
+    fn process_unlock(
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+        encoded_swap: [u8; 32],
+        initiator: [u8; 20],
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        let save_si_account_input = next_account_info(account_info_iter)?;
+        let save_balance_lp_account_input = next_account_info(account_info_iter)?;
+
+        unlock(
+            program_id,
+            save_si_account_input,
+            save_balance_lp_account_input,
+            encoded_swap,
+            initiator,
+        )
+    }
+
+    fn process_release(
+        program_id: &Pubkey,
+        accounts: &[AccountInfo],
+        encoded_swap: [u8; 32],
+        signature: [u8; 64],
+        initiator: [u8; 20],
+    ) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+
+        let payer_account = next_account_info(account_info_iter)?;
+        let token_mint_account = next_account_info(account_info_iter)?;
+        let token_program_info = next_account_info(account_info_iter)?;
+        let save_si_account_input = next_account_info(account_info_iter)?;
+        let save_oop_account_input = next_account_info(account_info_iter)?;
+        let save_balance_manager_account_input = next_account_info(account_info_iter)?;
+        let ta_user_input = next_account_info(account_info_iter)?;
+        let ta_program_input = next_account_info(account_info_iter)?;
+        let contract_signer_account_input = next_account_info(account_info_iter)?;
+
+        release(
+            program_id,
+            payer_account,
+            token_mint_account,
+            token_program_info,
+            save_si_account_input,
+            save_oop_account_input,
+            save_balance_manager_account_input,
+            ta_user_input,
+            ta_program_input,
+            contract_signer_account_input,
+            encoded_swap,
+            signature,
+            initiator,
         )
     }
 }

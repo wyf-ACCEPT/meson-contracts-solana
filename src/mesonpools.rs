@@ -3,17 +3,11 @@ use solana_program::{
     account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult, msg,
     program::invoke_signed, program_pack::Pack, pubkey::Pubkey, sysvar::Sysvar,
 };
-use spl_token::{
-    instruction::transfer_checked,
-    state::{Account as TokenAccount, Mint},
-};
+use spl_token::{instruction::transfer_checked, state::Mint};
 
 use crate::{
     error::MesonError,
-    state::{
-        self, check_balance_account_directly, owner_of_pool, write_related_account, ConstantValue,
-        PostedSwap,
-    },
+    state::{self, ConstantValue},
     utils::Utils,
 };
 
@@ -97,7 +91,7 @@ pub fn deposit_to_pool<'a, 'b>(
         let balance_data = save_balance_lp_account_input.data.borrow();
         balance_amount = u64::from_be_bytes(*array_ref![balance_data, 0, 8]);
     } // See the annotation of `bond_posted_swap` for explanation of these code
-    write_related_account(
+    state::write_related_account(
         save_balance_lp_account_input,
         &(balance_amount + amount).to_be_bytes(),
     )?;
@@ -164,7 +158,7 @@ pub fn withdraw_from_pool<'a, 'b>(
         balance_amount = u64::from_be_bytes(*array_ref![balance_data, 0, 8]);
     } // See the annotation of `bond_posted_swap` for explanation of these code
 
-    write_related_account(
+    state::write_related_account(
         save_balance_lp_account_input,
         &(balance_amount - amount).to_be_bytes(),
     )?;
@@ -241,7 +235,7 @@ pub fn lock<'a, 'b>(
     if amount > balance_amount {
         return Err(MesonError::PoolBalanceNotEnough.into());
     }
-    write_related_account(
+    state::write_related_account(
         save_balance_lp_account_input,
         &(balance_amount - amount).to_be_bytes(),
     )?;
@@ -278,7 +272,7 @@ pub fn unlock<'a, 'b>(
         let balance_data = save_balance_lp_account_input.data.borrow();
         balance_amount = u64::from_be_bytes(*array_ref![balance_data, 0, 8]);
     }
-    write_related_account(
+    state::write_related_account(
         save_balance_lp_account_input,
         &(balance_amount + amount).to_be_bytes(),
     )?;
@@ -289,7 +283,6 @@ pub fn unlock<'a, 'b>(
 pub fn release<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
-    user_account: &'a AccountInfo<'b>,
     token_mint_account: &'a AccountInfo<'b>,
     token_program_info: &'a AccountInfo<'b>,
     save_si_account_input: &'a AccountInfo<'b>,
@@ -307,7 +300,6 @@ pub fn release<'a, 'b>(
     let coin_index = Utils::out_coin_index_from(encoded_swap);
     let swap_id = Utils::get_swap_id(encoded_swap, initiator);
     let locked = state::remove_locked_swap(program_id, swap_id, save_si_account_input)?;
-    let recipient = user_account.key;
 
     // Check the time and signature
     let clock = Clock::get()?;
@@ -316,10 +308,10 @@ pub fn release<'a, 'b>(
         return Err(MesonError::SwapPassedLockPeriod.into());
     }
 
+    let recipient_to_eth = Utils::intercept_eth_address_from_pubkey_32b(locked.recipient);
     msg!("Signature    : {:?}", signature);
-    msg!("Recipient    : {:?}", recipient);
+    msg!("Recipient    : {:?}", recipient_to_eth);
     msg!("Initiator    : {:?}", initiator);
-    // let recipient_to_eth = Utils::eth_address_from_pubkey(recipient.to_bytes());
     // Utils::check_release_signature(encoded_swap, recipient_to_eth, signature, initiator)?;
 
     // Deal with waiving service fee
@@ -340,7 +332,7 @@ pub fn release<'a, 'b>(
             let balance_data = save_balance_manager_account_input.data.borrow();
             balance_amount = u64::from_be_bytes(*array_ref![balance_data, 0, 8]);
         }
-        write_related_account(
+        state::write_related_account(
             save_balance_manager_account_input,
             &(balance_amount + service_fee).to_be_bytes(),
         )?;

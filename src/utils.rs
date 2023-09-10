@@ -210,7 +210,7 @@ impl Utils {
         recipient: [u8; 20],
         signature: [u8; 64],
         signer_eth_addr: [u8; 20],
-    ) -> ProgramResult{
+    ) -> ProgramResult {
         let non_typed = Self::sign_non_typed(encoded_swap);
         let mut signing_data = Vec::new();
 
@@ -243,7 +243,7 @@ impl Utils {
         }
         let digest = keccak::hash(&signing_data).to_bytes();
         let recovered = Self::recover_eth_address(digest, signature);
-        
+
         if recovered == signer_eth_addr {
             Ok(())
         } else {
@@ -251,16 +251,18 @@ impl Utils {
         }
     }
 
-    pub fn eth_address_from_solana_address(addr: Pubkey) -> [u8; 20] {
-        let addr_bytes = addr.to_bytes();
-        *array_ref![addr_bytes, 0, 20]
+    // That is `eth_address_from_pubkey` in aptos
+    pub fn generate_eth_address_from_pubkey_64b(pk: [u8; 64]) -> [u8; 20] {
+        // Public key `pk` should be uncompressed
+        // Notice that Ethereum pubkey has an extra 0x04 prefix (specifies uncompressed)
+        let hash = keccak::hash(&pk).to_bytes();
+        *array_ref![&hash, 12, 20]
     }
 
-    pub fn eth_address_from_pubkey(eth_pubkey: [u8; 64]) -> [u8; 20] {
-        // Public key `eth_pubkey` should be uncompressed
-        // Notice that Ethereum pubkey has an extra 0x04 prefix (specifies uncompressed)
-        let hash = keccak::hash(&eth_pubkey).to_bytes();
-        *array_ref![&hash, 12, 20]
+    // That is `eth_address_from_aptos_address` in aptos
+    pub fn intercept_eth_address_from_pubkey_32b(addr: Pubkey) -> [u8; 20] {
+        let addr_array = addr.to_bytes();
+        *array_ref![&addr_array, 0, 20]
     }
 
     pub fn recover_eth_address(digest: [u8; 32], signature: [u8; 64]) -> [u8; 20] {
@@ -273,7 +275,7 @@ impl Utils {
 
         let pubkey = secp256k1_recover(&digest, recovery_id, &signature_split);
         match pubkey {
-            Ok(eth_pubkey) => Self::eth_address_from_pubkey(eth_pubkey.to_bytes()),
+            Ok(eth_pubkey) => Self::generate_eth_address_from_pubkey_64b(eth_pubkey.to_bytes()),
             Err(_error) => {
                 [0 as u8; 20] // Return 0x00 address if recover failed
             }
@@ -346,26 +348,8 @@ mod tests {
         );
     }
 
-    #[test] // (Error warning in move analyzer)
-    fn test_eth_address_from_aptos_address() {
-        let solana_addr = Pubkey::new_from_array([
-            0x01, 0x01, 0x5a, 0xce, 0x92, 0x0c, 0x71, 0x67, 0x94, 0x44, 0x59, 0x79, 0xbe, 0x68,
-            0xd4, 0x02, 0xd2, 0x8b, 0x28, 0x05, 0xb7, 0xbe, 0xaa, 0xe9, 0x35, 0xd7, 0xfe, 0x36,
-            0x9f, 0xa7, 0xcf, 0xa0,
-        ]);
-
-        let eth_addr = Utils::eth_address_from_solana_address(solana_addr);
-        assert_eq!(
-            eth_addr,
-            [
-                0x01, 0x01, 0x5a, 0xce, 0x92, 0x0c, 0x71, 0x67, 0x94, 0x44, 0x59, 0x79, 0xbe, 0x68,
-                0xd4, 0x02, 0xd2, 0x8b, 0x28, 0x05
-            ]
-        );
-    }
-
     #[test]
-    fn test_eth_address_from_pubkey() {
+    fn test_eth_address_from_pubkey_64b() {
         let eth_pubkey = [
             0x51, 0x39, 0xc6, 0xf9, 0x48, 0xe3, 0x8d, 0x3f, 0xfa, 0x36, 0xdf, 0x83, 0x60, 0x16,
             0xae, 0xa0, 0x8f, 0x37, 0xa9, 0x40, 0xa9, 0x13, 0x23, 0xf2, 0xa7, 0x85, 0xd1, 0x7b,
@@ -374,12 +358,30 @@ mod tests {
             0xee, 0x13, 0xe9, 0xad, 0xd6, 0xb7, 0xe1, 0x89,
         ];
 
-        let eth_addr = Utils::eth_address_from_pubkey(eth_pubkey);
+        let eth_addr = Utils::generate_eth_address_from_pubkey_64b(eth_pubkey);
         assert_eq!(
             eth_addr,
             [
                 0x05, 0x2c, 0x77, 0x07, 0x09, 0x35, 0x34, 0x03, 0x5f, 0xc2, 0xed, 0x60, 0xde, 0x35,
                 0xe1, 0x1b, 0xeb, 0xb6, 0x48, 0x6b
+            ]
+        );
+    }
+
+    #[test]
+    fn test_eth_address_from_pubkey_32b() {
+        let solana_addr = Pubkey::new_from_array([
+            0x01, 0x01, 0x5a, 0xce, 0x92, 0x0c, 0x71, 0x67, 0x94, 0x44, 0x59, 0x79, 0xbe, 0x68,
+            0xd4, 0x02, 0xd2, 0x8b, 0x28, 0x05, 0xb7, 0xbe, 0xaa, 0xe9, 0x35, 0xd7, 0xfe, 0x36,
+            0x9f, 0xa7, 0xcf, 0xa0,
+        ]);
+
+        let eth_addr = Utils::intercept_eth_address_from_pubkey_32b(solana_addr);
+        assert_eq!(
+            eth_addr,
+            [
+                0x01, 0x01, 0x5a, 0xce, 0x92, 0x0c, 0x71, 0x67, 0x94, 0x44, 0x59, 0x79, 0xbe, 0x68,
+                0xd4, 0x02, 0xd2, 0x8b, 0x28, 0x05
             ]
         );
     }

@@ -1,4 +1,5 @@
 use arrayref::{array_ref, array_refs};
+use solana_program::pubkey::Pubkey;
 
 use crate::error::MesonError;
 
@@ -114,6 +115,46 @@ pub enum MesonInstruction {
         coin_index: u8,
         amount: u64,
     },
+
+    /// [10]
+    /// 0. payer_account
+    /// 1. system_program
+    /// 2. authorized_account_input
+    /// 3. token_mint_account
+    /// 4. save_si_account_input: the data account to save `swapId -> lockedSwap` pair (48-bytes)
+    /// 5. save_token_list_account
+    /// 6. save_poaa_account_input
+    /// 7. save_balance_lp_account_input
+    Lock {
+        encoded_swap: [u8; 32],
+        signature: [u8; 64],
+        initiator: [u8; 20],
+        recipient: Pubkey,
+    },
+
+    /// [11]
+    /// 0. save_si_account_input
+    /// 1. save_balance_lp_account_input
+    Unlock {
+        encoded_swap: [u8; 32],
+        initiator: [u8; 20],
+    },
+
+    /// [12]
+    /// 0. payer_account
+    /// 1. token_mint_account
+    /// 2. token_program_info
+    /// 3. save_si_account_input
+    /// 4. save_oop_account_input
+    /// 5. save_balance_manager_account_input: the data account to save `pool_index=0(the manager) & coin_index -> balance` pair (8-bytes long to save u64 balance)
+    /// 6. ta_user_input
+    /// 7. ta_program_input
+    /// 8. contract_signer_account_input
+    Release {
+        encoded_swap: [u8; 32],
+        signature: [u8; 64],
+        initiator: [u8; 20],
+    },
 }
 
 impl MesonInstruction {
@@ -187,6 +228,38 @@ impl MesonInstruction {
                     pool_index: u64::from_be_bytes(*pool_index_ref),
                     coin_index: coin_index_ref[0],
                     amount: u64::from_be_bytes(*amount_ref),
+                }
+            }
+
+            10 => {
+                let rest_fix = *array_ref![rest, 0, 148];
+                let (encoded_swap_ref, signature_ref, initiator_ref, recipient_ref) =
+                    array_refs![&rest_fix, 32, 64, 20, 32];
+                MesonInstruction::Lock {
+                    encoded_swap: *encoded_swap_ref,
+                    signature: *signature_ref,
+                    initiator: *initiator_ref,
+                    recipient: Pubkey::new_from_array(*recipient_ref),
+                }
+            }
+
+            11 => {
+                let rest_fix = *array_ref![rest, 0, 52];
+                let (encoded_swap_ref, initiator_ref) = array_refs![&rest_fix, 32, 20];
+                MesonInstruction::Unlock {
+                    encoded_swap: *encoded_swap_ref,
+                    initiator: *initiator_ref,
+                }
+            }
+
+            12 => {
+                let rest_fix = *array_ref![rest, 0, 116];
+                let (encoded_swap_ref, signature_ref, initiator_ref) =
+                    array_refs![&rest_fix, 32, 64, 20];
+                MesonInstruction::Release {
+                    encoded_swap: *encoded_swap_ref,
+                    signature: *signature_ref,
+                    initiator: *initiator_ref,
                 }
             }
 
