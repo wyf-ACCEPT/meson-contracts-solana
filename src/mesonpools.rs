@@ -283,10 +283,11 @@ pub fn unlock<'a, 'b>(
 pub fn release<'a, 'b>(
     program_id: &Pubkey,
     payer_account: &'a AccountInfo<'b>,
+    system_program: &'a AccountInfo<'b>,
     token_mint_account: &'a AccountInfo<'b>,
     token_program_info: &'a AccountInfo<'b>,
     save_si_account_input: &'a AccountInfo<'b>,
-    save_oop_account_input: &'a AccountInfo<'b>,
+    save_oop_admin_account_input: &'a AccountInfo<'b>,
     save_balance_manager_account_input: &'a AccountInfo<'b>,
     ta_user_input: &'a AccountInfo<'b>,
     ta_program_input: &'a AccountInfo<'b>,
@@ -317,7 +318,7 @@ pub fn release<'a, 'b>(
     // Deal with waiving service fee
     let waived = Utils::fee_waived(encoded_swap);
     if waived {
-        state::assert_is_premium_manager(program_id, payer_account, save_oop_account_input)?;
+        state::assert_is_premium_manager(program_id, payer_account, save_oop_admin_account_input)?;
     } else {
         let service_fee = Utils::service_fee(encoded_swap);
         amount -= service_fee;
@@ -327,6 +328,23 @@ pub fn release<'a, 'b>(
             coin_index,
             save_balance_manager_account_input,
         )?;
+
+        // First time to collect service fee for manager -- register a data account to save the balance
+        if save_balance_manager_account_input.data_len() == 0 {
+            let mut pool_coin_array = [0; 9];
+            pool_coin_array[8] = coin_index;
+            msg!("Create new pool-coin data account for manager.");
+            state::create_related_account(
+                program_id,
+                payer_account,
+                save_balance_manager_account_input,
+                system_program,
+                ConstantValue::SAVE_BALANCE_PHRASE,
+                &pool_coin_array,
+                8,
+            )?;
+        }
+
         let balance_amount;
         {
             let balance_data = save_balance_manager_account_input.data.borrow();

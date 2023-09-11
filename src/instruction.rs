@@ -142,14 +142,15 @@ pub enum MesonInstruction {
 
     /// [12]
     /// 0. payer_account
-    /// 1. token_mint_account
-    /// 2. token_program_info
-    /// 3. save_si_account_input
-    /// 4. save_oop_account_input
-    /// 5. save_balance_manager_account_input: the data account to save `pool_index=0(the manager) & coin_index -> balance` pair (8-bytes long to save u64 balance)
-    /// 6. ta_user_input
-    /// 7. ta_program_input
-    /// 8. contract_signer_account_input
+    /// 1. system_program
+    /// 2. token_mint_account
+    /// 3. token_program_info
+    /// 4. save_si_account_input
+    /// 5. save_oop_admin_account_input: the data account to save `pool_index=0(the manager) -> authorized address` pair (32-bytes long)
+    /// 6. save_balance_manager_account_input: the data account to save `pool_index=0(the manager) & coin_index -> balance` pair (8-bytes long to save u64 balance)
+    /// 7. ta_user_input
+    /// 8. ta_program_input
+    /// 9. contract_signer_account_input
     Release {
         encoded_swap: [u8; 32],
         signature: [u8; 64],

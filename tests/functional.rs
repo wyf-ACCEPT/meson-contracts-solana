@@ -486,11 +486,16 @@ async fn test_all() {
     // =                                                                   =
     // =====================================================================
     println!("\n================== Step 1.1 Post Swap ==================");
+    // let mut encoded_swap: [u8; 32] = [
+    //     0x01, 0x00, 0x00, 0xe4, 0xe1, 0xc0, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81,
+    //     0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x01, 0xf5, 0x00, 0x01,
+    //     0xf5, 0x00,
+    // ];  // for fee-waived
     let mut encoded_swap: [u8; 32] = [
-        0x01, 0x00, 0x00, 0xe4, 0xe1, 0xc0, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81,
+        0x01, 0x00, 0x00, 0xe4, 0xe1, 0xc0, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6, 0x77, 0x81,
         0x5c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x4d, 0xcb, 0x98, 0x01, 0xf5, 0x00, 0x01,
         0xf5, 0x00,
-    ];
+    ];  // for not fee-waived
     let now_timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -915,6 +920,13 @@ async fn test_all() {
             &[coin_index],
         ],
         &program_id,
+    );    
+    let (save_oop_pubkey_manager, _) = Pubkey::find_program_address(
+        &[
+            ConstantValue::SAVE_OWNER_OF_POOLS_PHRASE,
+            &(0 as u64).to_be_bytes(),
+        ],
+        &program_id,
     );
 
     let mut data_input_array = [12 as u8; 117];
@@ -929,10 +941,11 @@ async fn test_all() {
             &data_input_array,
             vec![
                 AccountMeta::new(payer_pubkey, true),
+                AccountMeta::new(system_program::id(), false),
                 AccountMeta::new(mint_pubkey, false),
                 AccountMeta::new(spl_token::id(), false),
                 AccountMeta::new(save_si_pubkey, false),
-                AccountMeta::new(save_oop_pubkey_alice, false),
+                AccountMeta::new(save_oop_pubkey_manager, false),
                 AccountMeta::new(save_balance_pubkey_manager, false),
                 AccountMeta::new(ta_bob.pubkey(), false),
                 AccountMeta::new(ta_program.pubkey(), false),
@@ -944,6 +957,23 @@ async fn test_all() {
         recent_blockhash,
     );
     banks_client.process_transaction(transaction).await.unwrap();
+
+    println!(
+        "Balance for coin {}, pool {}: {}",
+        coin_index,
+        alice_pool_index,
+        u64::from_be_bytes(*array_ref![balance_info.data(), 0, 8])
+    );
+    show_usdc_balance_all(
+        &mut banks_client,
+        &ta_program,
+        &ta_alice,
+        &ta_bob,
+        &program_id,
+        &alice,
+        &bob,
+        "deposit",
+    ).await;
 
 
 

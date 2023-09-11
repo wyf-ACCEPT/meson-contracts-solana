@@ -428,10 +428,11 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
 
         let payer_account = next_account_info(account_info_iter)?;
+        let system_program = next_account_info(account_info_iter)?;
         let token_mint_account = next_account_info(account_info_iter)?;
         let token_program_info = next_account_info(account_info_iter)?;
         let save_si_account_input = next_account_info(account_info_iter)?;
-        let save_oop_account_input = next_account_info(account_info_iter)?;
+        let save_oop_admin_account_input = next_account_info(account_info_iter)?;
         let save_balance_manager_account_input = next_account_info(account_info_iter)?;
         let ta_user_input = next_account_info(account_info_iter)?;
         let ta_program_input = next_account_info(account_info_iter)?;
@@ -440,10 +441,11 @@ impl Processor {
         release(
             program_id,
             payer_account,
+            system_program,
             token_mint_account,
             token_program_info,
             save_si_account_input,
-            save_oop_account_input,
+            save_oop_admin_account_input,
             save_balance_manager_account_input,
             ta_user_input,
             ta_program_input,
