@@ -74,13 +74,15 @@ pub enum MesonInstruction {
     /// 1. token_program_info
     /// 2. save_ps_account_input
     /// 3. save_oop_account_input
-    /// 4. ta_lp_input: the token account for lp (the owner of pool_index)
-    /// 5. ta_program_input
-    /// 6. contract_signer_account_input: the account as a singer of the program contract
+    /// 4. save_balance_lp_account_input: see below for explanation
+    /// 5. ta_lp_input: the token account for lp (the owner of pool_index)
+    /// 6. ta_program_input
+    /// 7. contract_signer_account_input: the account as a singer of the program contract
     ExecuteSwap {
         encoded_swap: [u8; 32],
         signature: [u8; 64],
         recipient: [u8; 20],
+        deposit_to_pool_bool: bool,
     },
 
     /// [8]
@@ -202,13 +204,14 @@ impl MesonInstruction {
             }
 
             7 => {
-                let rest_fix = *array_ref![rest, 0, 116];
-                let (encoded_swap_ref, signature_ref, recipient_ref) =
-                    array_refs![&rest_fix, 32, 64, 20];
+                let rest_fix = *array_ref![rest, 0, 117];
+                let (encoded_swap_ref, signature_ref, recipient_ref, bool_ref) =
+                    array_refs![&rest_fix, 32, 64, 20, 1];
                 MesonInstruction::ExecuteSwap {
                     encoded_swap: *encoded_swap_ref,
                     signature: *signature_ref,
                     recipient: *recipient_ref,
+                    deposit_to_pool_bool: bool_ref[0] != 0
                 }
             }
 

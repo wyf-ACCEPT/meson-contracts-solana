@@ -1,3 +1,4 @@
+use arrayref::array_ref;
 use solana_program::{
     account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult, msg,
     program::invoke_signed, program_pack::Pack, pubkey::Pubkey, sysvar::Sysvar,
@@ -9,7 +10,7 @@ use spl_token::{
 
 use crate::{
     error::MesonError,
-    state::{self, owner_of_pool, ConstantValue, PostedSwap},
+    state::{self, check_balance_account_directly, owner_of_pool, ConstantValue, PostedSwap},
     utils::Utils,
 };
 
@@ -165,13 +166,14 @@ pub fn execute_swap<'a, 'b>(
     token_program_info: &'a AccountInfo<'b>,
     save_ps_account_input: &'a AccountInfo<'b>,
     save_oop_account_input: &'a AccountInfo<'b>,
+    save_balance_lp_account_input: &'a AccountInfo<'b>,
     ta_lp_input: &'a AccountInfo<'b>,
     ta_program_input: &'a AccountInfo<'b>,
     contract_signer_account_input: &'a AccountInfo<'b>,
     encoded_swap: [u8; 32],
     signature: [u8; 64],
     recipient: [u8; 20],
-    // deposit_to_pool: todo(), default false
+    deposit_to_pool_bool: bool,
 ) -> ProgramResult {
     let PostedSwap {
         pool_index,
@@ -194,31 +196,50 @@ pub fn execute_swap<'a, 'b>(
     }
     let amount = Utils::amount_from(encoded_swap);
 
-    let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
-    let (expected_contract_signer, bump_seed) =
-        Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], program_id);
-    if expected_contract_signer != *contract_signer_account_input.key {
-        return Err(MesonError::PdaAccountMismatch.into());
+    if deposit_to_pool_bool {
+        let coin_index = Utils::in_coin_index_from(encoded_swap);
+        check_balance_account_directly(
+            program_id,
+            pool_index,
+            coin_index,
+            save_balance_lp_account_input,
+        )?;
+        let balance_amount;
+        {
+            let balance_data = save_balance_lp_account_input.data.borrow();
+            balance_amount = u64::from_be_bytes(*array_ref![balance_data, 0, 8]);
+        } // See the annotation of `bond_posted_swap` for explanation of these code
+        state::write_related_account(
+            save_balance_lp_account_input,
+            &(balance_amount + amount).to_be_bytes(),
+        )?;
+    } else {
+        let decimals = Mint::unpack(&token_mint_account.data.borrow())?.decimals;
+        let (expected_contract_signer, bump_seed) =
+            Pubkey::find_program_address(&[ConstantValue::CONTRACT_SIGNER], program_id);
+        if expected_contract_signer != *contract_signer_account_input.key {
+            return Err(MesonError::PdaAccountMismatch.into());
+        }
+        invoke_signed(
+            &transfer_checked(
+                token_program_info.key,
+                ta_program_input.key,
+                token_mint_account.key,
+                ta_lp_input.key,
+                &expected_contract_signer,
+                &[],
+                amount,
+                decimals,
+            )
+            .unwrap(),
+            &[
+                ta_program_input.clone(),
+                token_mint_account.clone(),
+                ta_lp_input.clone(),
+                contract_signer_account_input.clone(),
+            ],
+            &[&[ConstantValue::CONTRACT_SIGNER, &[bump_seed]]],
+        )?;
     }
-    invoke_signed(
-        &transfer_checked(
-            token_program_info.key,
-            ta_program_input.key,
-            token_mint_account.key,
-            ta_lp_input.key,
-            &expected_contract_signer,
-            &[],
-            amount,
-            decimals,
-        )
-        .unwrap(),
-        &[
-            ta_program_input.clone(),
-            token_mint_account.clone(),
-            ta_lp_input.clone(),
-            contract_signer_account_input.clone(),
-        ],
-        &[&[ConstantValue::CONTRACT_SIGNER, &[bump_seed]]],
-    )?;
     Ok(())
 }

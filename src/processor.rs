@@ -51,8 +51,9 @@ impl Processor {
                 encoded_swap,
                 signature,
                 recipient,
+                deposit_to_pool_bool,
             } => {
-                Self::process_execute_swap(program_id, accounts, encoded_swap, signature, recipient)
+                Self::process_execute_swap(program_id, accounts, encoded_swap, signature, recipient, deposit_to_pool_bool)
             }
             MesonInstruction::DepositToPool {
                 pool_index,
@@ -262,6 +263,7 @@ impl Processor {
         encoded_swap: [u8; 32],
         signature: [u8; 64],
         recipient: [u8; 20],
+        deposit_to_pool_bool: bool,
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
 
@@ -269,6 +271,7 @@ impl Processor {
         let token_program_info = next_account_info(account_info_iter)?;
         let save_ps_account_input = next_account_info(account_info_iter)?;
         let save_oop_account_input = next_account_info(account_info_iter)?;
+        let save_balance_lp_account_input = next_account_info(account_info_iter)?;
         let ta_lp_input = next_account_info(account_info_iter)?;
         let ta_program_input = next_account_info(account_info_iter)?;
         let contract_signer_account_input = next_account_info(account_info_iter)?;
@@ -279,12 +282,14 @@ impl Processor {
             token_program_info,
             save_ps_account_input,
             save_oop_account_input,
+            save_balance_lp_account_input,
             ta_lp_input,
             ta_program_input,
             contract_signer_account_input,
             encoded_swap,
             signature,
             recipient,
+            deposit_to_pool_bool,
         )
     }
 
