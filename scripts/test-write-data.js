@@ -8,16 +8,15 @@ const privateKeyBytes = new Uint8Array(privateKeyString.split(',').map(byteStr =
 const aliceSigner = Keypair.fromSecretKey(privateKeyBytes)
 console.log(aliceSigner)
 
-// (async () => {
+async function main() {
+  const url = 'https://api.devnet.solana.com'
+  const connection = new Connection(url, 'confirmed');
+  await connection.getVersion();
+  console.log(privateKeyBytes)
+  console.log('Private key bytes:', privateKeyBytes);
+}
 
-//   const url = 'https://api.devnet.solana.com'
-//   const connection = new Connection(url, 'confirmed');
-//   await connection.getVersion();
-//   console.log(privateKeyBytes)
-  
-//   console.log('Private key bytes:', privateKeyBytes);
-  
-// })()
+main()
 
 
 // // Client
