@@ -3,7 +3,8 @@ const {
   Connection, Keypair, Transaction, sendAndConfirmTransaction, TransactionInstruction, PublicKey
 } = require('@solana/web3.js');
 
-const privateKeyString = process.env.PRIVATE_KEY;
+// const privateKeyString = process.env.PRIVATE_KEY;
+const privateKeyString = '80,83,11,9,145,1,91,144,244,223,98,141,59,249,88,33,153,25,201,147,156,91,95,119,243,156,94,140,196,71,237,36,63,108,109,236,195,131,233,185,220,251,212,47,126,10,250,90,192,76,94,87,130,78,96,21,245,253,63,34,12,116,126,191'
 const privateKeyBytes = new Uint8Array(privateKeyString.split(',').map(byteStr => parseInt(byteStr.trim(), 10)));
 const aliceSigner = Keypair.fromSecretKey(privateKeyBytes)
 console.log(aliceSigner)
